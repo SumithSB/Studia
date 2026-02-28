@@ -47,3 +47,40 @@ def stream_completion(messages: list[dict]):
             if obj.get("done"):
                 yield ("", True, None)
                 return
+
+
+def summarise_history(messages: list[dict]) -> str:
+    """Non-streaming call to Ollama to summarise old conversation exchanges.
+
+    Used by session.get_messages_for_llm() when history exceeds MAX_HISTORY_EXCHANGES.
+    Returns a concise context block (max ~400 words) or empty string on failure.
+    """
+    parts = []
+    for m in messages:
+        role = m.get("role", "")
+        content = m.get("content", "")
+        if content and role in ("user", "assistant"):
+            prefix = "User" if role == "user" else "Assistant"
+            parts.append(f"{prefix}: {content}")
+
+    if not parts:
+        return ""
+
+    conversation_text = "\n".join(parts)
+    prompt = (
+        "Summarise this interview prep conversation into a concise context block "
+        "(max 400 words). Preserve: key topics discussed, questions asked, concepts "
+        "explained, and the user's demonstrated level of understanding.\n\n"
+        f"{conversation_text}"
+    )
+
+    url = f"{OLLAMA_BASE_URL}/api/generate"
+    payload = {"model": OLLAMA_MODEL, "prompt": prompt, "stream": False}
+
+    try:
+        r = requests.post(url, json=payload, timeout=60)
+        r.raise_for_status()
+        data = r.json()
+        return strip_think_tags(data.get("response", ""))
+    except Exception:
+        return ""

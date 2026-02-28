@@ -8,3 +8,5 @@ beautifulsoup4
 ddgs
 pyttsx3
 python-multipart
+pypdf
+python-docx

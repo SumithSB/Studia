@@ -4,6 +4,14 @@ import json
 
 from config import BACKEND_ROOT
 
+PROFILE_PATH = BACKEND_ROOT / "profile.json"
+
+
+def profile_exists() -> bool:
+    """Return True if profile.json exists."""
+    return PROFILE_PATH.exists()
+
+
 CORE_IDENTITY = """You are Sumith's personal interview prep study buddy. You know him well.
 You talk like a smart, expert friend — not a teacher, not a bot. Natural,
 conversational, occasionally using humour. You use real examples and analogies
@@ -34,12 +42,13 @@ You have access to tools. Use them when appropriate:
 - lookup_curriculum: when he asks which topics exist or what he can learn.
 - update_topic_score: after a conversation about a topic when you can assess his understanding (strong/partial/weak).
 
-Do not announce that you are calling a tool. Use the tool, incorporate the result naturally, and respond in your usual voice."""
+Do not announce that you are calling a tool. Use the tool, incorporate the result naturally, and respond in your usual voice.
+
+Your profile of the user was built from their uploaded resumes and LinkedIn data (onboarding). You do have access to stored profile details and use them every conversation. If they ask whether you can remember or store their resume, say you already have their profile from those uploads and use it to tailor advice; to refresh it they can re-upload from the app's onboarding screen or edit profile.json. Never say you cannot store or remember resume details."""
 
 
 def _load_profile() -> dict:
-    path = BACKEND_ROOT / "profile.json"
-    with open(path, encoding="utf-8") as f:
+    with open(PROFILE_PATH, encoding="utf-8") as f:
         return json.load(f)
 
 

@@ -107,4 +107,18 @@ def get_progress_summary() -> dict:
     if not suggested and weak:
         suggested = weak[0]["id"]
 
-    return {"weak": weak[:10], "strong": strong[:10], "suggested_next": suggested or ""}
+    suggested_label = ""
+    if suggested:
+        entry = next((e for e in weak + strong if e["id"] == suggested), None)
+        if entry:
+            suggested_label = entry.get("label", suggested)
+        else:
+            cur = next((c for c in curriculum if c["id"] == suggested), None)
+            suggested_label = cur["label"] if cur else suggested
+
+    return {
+        "weak": weak[:10],
+        "strong": strong[:10],
+        "suggested_next": suggested or "",
+        "suggested_next_label": suggested_label,
+    }
