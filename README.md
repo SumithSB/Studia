@@ -125,6 +125,19 @@ studia/
 - **Backend**: `backend/config.py` — model, Whisper size, TTS on/off, history limits
 - **Profile**: `backend/profile.json` — loaded on every request (hot reload)
 - **Curriculum**: `backend/curriculum.json` — topic IDs, labels, keywords
+- **Frontend API URL**: `frontend/lib/services/api_service.dart` — `baseUrl` (default `http://127.0.0.1:8000`). Change if backend runs elsewhere.
+
+## External dependencies (outside your control)
+
+Things that may break or need updates as third parties change:
+
+| Dependency | What to watch |
+|------------|---------------|
+| **Ollama model** | `deepseek-r1:8b` — Ollama can rename/remove models. Update `config.py` if the model name changes. |
+| **ddgs** | DuckDuckGo search for company research. Rate limits or API changes can affect `/research`. |
+| **Research sources** | LeetCode, Blind, Glassdoor, GitHub — site structure or scraping policies can change. Spec already notes Glassdoor blocks direct fetch. |
+| **faster-whisper** | Pulls models from Hugging Face; model availability may change. |
+| **pyttsx3** | Uses system TTS; behavior differs by OS. |
 
 ## Roadmap
 
@@ -139,7 +152,3 @@ studia/
 - `.env` — any API keys or secrets (none required for local use)
 
 Copy `profile.example.json` to `profile.json` to get started.
-
-## License
-
-MIT
