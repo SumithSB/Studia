@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:gpt_markdown/gpt_markdown.dart';
 import '../theme/app_theme.dart';
 
 class MessageBubble extends StatefulWidget {
@@ -151,79 +151,12 @@ class _AssistantBubble extends StatelessWidget {
                 ),
                 border: Border.all(color: kDivider, width: 1),
               ),
-              child: MarkdownBody(
-                data: content,
-                softLineBreak: true,
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(
-                    color: kTextPrimary,
-                    fontSize: 15,
-                    height: 1.55,
-                  ),
-                  strong: const TextStyle(
-                    color: kTextPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  em: const TextStyle(
-                    color: kTextPrimary,
-                    fontStyle: FontStyle.italic,
-                  ),
-                  h1: const TextStyle(
-                    color: kTextPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    height: 1.4,
-                  ),
-                  h2: const TextStyle(
-                    color: kTextPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    height: 1.4,
-                  ),
-                  h3: const TextStyle(
-                    color: kTextPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    height: 1.4,
-                  ),
-                  code: const TextStyle(
-                    backgroundColor: Color(0xFF2A2A2A),
-                    color: kAccentBlue,
-                    fontFamily: 'monospace',
-                    fontSize: 13,
-                  ),
-                  codeblockDecoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: kDivider),
-                  ),
-                  codeblockPadding: const EdgeInsets.all(12),
-                  blockquote: const TextStyle(
-                    color: kTextSecondary,
-                    fontSize: 15,
-                    height: 1.5,
-                  ),
-                  blockquotePadding: const EdgeInsets.only(
-                      left: 12, top: 4, bottom: 4),
-                  blockquoteDecoration: const BoxDecoration(
-                    border: Border(
-                      left: BorderSide(color: kAccentPurple, width: 3),
-                    ),
-                  ),
-                  listBullet: const TextStyle(
-                    color: kTextSecondary,
-                    fontSize: 15,
-                  ),
-                  listIndent: 20,
-                  tableHead: const TextStyle(
-                    color: kTextPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  tableBody: const TextStyle(color: kTextPrimary),
-                  tableBorder: TableBorder.all(color: kDivider, width: 1),
-                  horizontalRuleDecoration: const BoxDecoration(
-                    border: Border(bottom: BorderSide(color: kDivider)),
-                  ),
+              child: GptMarkdown(
+                content,
+                style: const TextStyle(
+                  color: kTextPrimary,
+                  fontSize: 15,
+                  height: 1.55,
                 ),
               ),
             ),

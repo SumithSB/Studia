@@ -9,12 +9,14 @@ import 'screens/chat_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/api_service.dart';
 import 'services/audio_service.dart';
+import 'services/speech_tts_service.dart';
 import 'theme/app_theme.dart';
 
 void main() {
   // Permanent app-scoped singletons — available before any route loads
   Get.put(ApiService(), permanent: true);
   Get.put(AudioService(), permanent: true);
+  Get.put(SpeechTtsService(), permanent: true);
 
   // ProfileController drives the ProfileGate home widget
   Get.put(ProfileController());

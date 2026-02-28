@@ -3,11 +3,10 @@
 import json
 from fastapi import FastAPI, File, HTTPException, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from audio import stt, tts
-from config import AGENT_MODE, TTS_ENABLED
+from config import AGENT_MODE
 from core import agent, context, llm
 from services import profile_builder, research, session, tracker
 
@@ -15,10 +14,6 @@ from services import profile_builder, research, session, tracker
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
-
-
-class TtsRequest(BaseModel):
-    text: str
 
 
 app = FastAPI(title="Studia")
@@ -36,23 +31,6 @@ def _stream_response(messages: list[dict], session_id: str):
     else:
         for token, done, _ in llm.stream_completion(messages):
             yield (token, done, None)
-
-
-@app.post("/tts")
-def tts_endpoint(req: TtsRequest):
-    """Generate speech from text and return audio bytes for client playback."""
-    if not TTS_ENABLED:
-        raise HTTPException(503, "TTS is disabled.")
-    text = (req.text or "").strip()
-    if not text:
-        raise HTTPException(400, "Text is required.")
-    audio_bytes = tts.speak_to_bytes(text)
-    if not audio_bytes:
-        raise HTTPException(500, "Could not generate speech.")
-    return Response(
-        content=audio_bytes,
-        media_type="audio/wav",
-    )
 
 
 @app.get("/profile/status")
@@ -129,55 +107,6 @@ def chat_endpoint(req: ChatRequest):
                 content = "".join(full_response)
                 if content:
                     session.add_exchange(session_id, "assistant", content)
-                if TTS_ENABLED and content:
-                    tts.speak(content)
-                yield _sse_event({"done": True})
-                session.log_session(session_id)
-                return
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.post("/voice")
-def voice_endpoint(audio: UploadFile = ..., session_id: str = Form("default")):
-    """Transcribe WAV, then stream LLM response via SSE."""
-    if not context.profile_exists():
-        raise HTTPException(503, "Profile not set. Complete onboarding (upload resumes and LinkedIn data) first.")
-    audio_bytes = audio.file.read()
-    transcript = stt.transcribe(audio_bytes)
-    session.add_exchange(session_id, "user", transcript)
-
-    def generate():
-        yield _sse_event({"transcript": transcript, "session_id": session_id})
-        company, research_ctx = session.get_research_context(session_id)
-        sys_prompt = context.build_system_prompt(
-            research_context=research_ctx,
-            company=company,
-        )
-        messages = [
-            {"role": "system", "content": sys_prompt},
-            *[
-                {"role": h["role"], "content": h["content"]}
-                for h in session.get_messages_for_llm(session_id, summarise_fn=llm.summarise_history)
-            ],
-        ]
-        full_response = []
-        for token, done, tool_info in _stream_response(messages, session_id):
-            if tool_info:
-                yield _sse_event({"tool_call": tool_info.get("tool"), "args": tool_info.get("args", {})})
-            if token:
-                full_response.append(token)
-                yield _sse_event({"token": token})
-            if done:
-                content = "".join(full_response)
-                if content:
-                    session.add_exchange(session_id, "assistant", content)
-                if TTS_ENABLED and content:
-                    tts.speak(content)
                 yield _sse_event({"done": True})
                 session.log_session(session_id)
                 return

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 const baseUrl = 'http://127.0.0.1:8000';
@@ -56,18 +55,6 @@ class ApiService {
     return list.map((e) => e as Map<String, dynamic>).toList();
   }
 
-  /// Generate TTS audio for client playback. Returns bytes or null on failure.
-  Future<Uint8List?> getTtsAudio(String text) async {
-    if (text.trim().isEmpty) return null;
-    final r = await http.post(
-      Uri.parse('$baseUrl/tts'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'text': text}),
-    );
-    if (r.statusCode != 200) return null;
-    return r.bodyBytes;
-  }
-
   Future<Map<String, dynamic>> research(String type, String value) async {
     final r = await http.post(
       Uri.parse('$baseUrl/research'),
@@ -103,35 +90,4 @@ class ApiService {
     }
   }
 
-  Stream<Map<String, dynamic>> streamVoice(
-    List<int> audioBytes,
-    String sessionId,
-  ) async* {
-    final uri = Uri.parse('$baseUrl/voice');
-    final req = http.MultipartRequest('POST', uri);
-    req.fields['session_id'] = sessionId;
-    req.files.add(http.MultipartFile.fromBytes(
-      'audio',
-      audioBytes,
-      filename: 'audio.wav',
-    ));
-
-    final client = http.Client();
-    final streamed = await client.send(req);
-    var buffer = '';
-    await for (final chunk in streamed.stream.transform(utf8.decoder)) {
-      buffer += chunk;
-      final lines = buffer.split('\n');
-      buffer = lines.removeLast();
-      for (final line in lines) {
-        if (line.startsWith('data: ')) {
-          final data = line.substring(6);
-          if (data.isEmpty) continue;
-          try {
-            yield jsonDecode(data) as Map<String, dynamic>;
-          } catch (_) {}
-        }
-      }
-    }
-  }
 }

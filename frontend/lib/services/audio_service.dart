@@ -1,8 +1,7 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+
+import 'audio_service_io.dart' if (dart.library.html) 'audio_service_web.dart' as platform_impl;
 
 class AudioService {
   final _recorder = AudioRecorder();
@@ -26,21 +25,14 @@ class AudioService {
   }
 
   Future<List<int>> getRecordedBytes(String path) async {
-    final file = File(path);
-    return await file.readAsBytes();
+    return platform_impl.getRecordedBytes(path);
   }
 
   Future<String> getTempPath() async {
-    final dir = await getTemporaryDirectory();
-    return '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.wav';
+    return platform_impl.getTempPath();
   }
 
-  /// Play TTS audio bytes (e.g. from /tts). Runs asynchronously.
-  Future<void> playTtsFromBytes(Uint8List bytes) async {
-    if (bytes.isEmpty) return;
-    try {
-      await _player.setSource(BytesSource(bytes, mimeType: 'audio/wav'));
-      await _player.resume();
-    } catch (_) {}
+  Future<void> stopPlayback() async {
+    await _player.stop();
   }
 }

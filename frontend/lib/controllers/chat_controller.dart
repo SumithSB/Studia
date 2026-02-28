@@ -8,11 +8,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/enums.dart';
 import '../services/api_service.dart';
 import '../services/audio_service.dart';
+import '../services/speech_tts_service.dart';
 import '../theme/app_theme.dart';
 
 class ChatController extends GetxController {
   final _api = Get.find<ApiService>();
   final _audio = Get.find<AudioService>();
+  final _speechTts = Get.find<SpeechTtsService>();
 
   final messages = <Map<String, String>>[].obs;
   final streamingContent = ''.obs;
@@ -53,8 +55,14 @@ class ChatController extends GetxController {
         modeIndex < InputMode.values.length) {
       inputMode.value = InputMode.values[modeIndex];
     }
-    final speak = prefs.getBool('speak_responses');
-    if (speak != null) speakResponses.value = speak;
+    // Voice mode implies speak on; otherwise restore saved preference
+    if (inputMode.value == InputMode.voice) {
+      speakResponses.value = true;
+      await _persistSpeakResponses(true);
+    } else {
+      final speak = prefs.getBool('speak_responses');
+      if (speak != null) speakResponses.value = speak;
+    }
 
     try {
       final history = await _api.getSessionHistory(_sessionId);
@@ -72,14 +80,22 @@ class ChatController extends GetxController {
 
   Future<void> setInputMode(InputMode mode) async {
     inputMode.value = mode;
+    if (mode == InputMode.voice) {
+      speakResponses.value = true;
+      await _persistSpeakResponses(true);
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('input_mode', mode.index);
   }
 
-  Future<void> setSpeakResponses(bool value) async {
-    speakResponses.value = value;
+  Future<void> _persistSpeakResponses(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('speak_responses', value);
+  }
+
+  Future<void> setSpeakResponses(bool value) async {
+    speakResponses.value = value;
+    await _persistSpeakResponses(value);
   }
 
   // ── Topic suggestion ─────────────────────────────────────────────────────────
@@ -225,7 +241,8 @@ class ChatController extends GetxController {
           toolStatus.value = null;
           isLoading.value = false;
           _fetchSuggestedTopic();
-          if (inputMode.value == InputMode.voice && speakResponses.value) {
+          // In Voice mode, speak replies; in Chat mode, text only.
+          if (inputMode.value == InputMode.voice) {
             _playTtsIfEnabled(content);
           }
         }
@@ -240,77 +257,115 @@ class ChatController extends GetxController {
   }
 
   // ── Voice ─────────────────────────────────────────────────────────────────────
+  // On-device STT (speech_to_text) then streamChat; TTS via flutter_tts. Backend text-only.
 
   Future<void> toggleVoice() async {
     if (voiceState.value == VoiceState.recording) {
       voiceState.value = VoiceState.processing;
-      final path = await _audio.stopRecording();
-      if (path != null) {
-        final bytes = await _audio.getRecordedBytes(path);
-        try {
-          isLoading.value = true;
-          streamingContent.value = '';
-          toolStatus.value = null;
-          suggestedTopicId.value = null;
-          suggestedTopicLabel.value = null;
+      final transcript = await _speechTts.stopListening();
+      if (transcript.isEmpty) {
+        voiceState.value = VoiceState.idle;
+        _voiceErrorSnackbar('Could not hear you. Please speak clearly and try again.');
+        return;
+      }
+      messages.add({'role': 'user', 'content': transcript});
+      try {
+        isLoading.value = true;
+        streamingContent.value = '';
+        toolStatus.value = null;
+        suggestedTopicId.value = null;
+        suggestedTopicLabel.value = null;
 
-          await for (final event in _api.streamVoice(bytes, _sessionId)) {
-            if (isClosed) return;
-            if (event['transcript'] != null) {
-              messages.add({
-                'role': 'user',
-                'content': event['transcript'] as String,
-              });
-            }
-            if (event['tool_call'] != null) {
-              final tool = event['tool_call'] as String? ?? '';
-              final args = event['args'] as Map<String, dynamic>?;
-              toolStatus.value = _toolStatusLabel(tool, args);
-            }
-            if (event['token'] != null) {
-              toolStatus.value = null;
-              streamingContent.value += event['token'] as String;
-            }
-            if (event['done'] == true) {
-              final content = streamingContent.value;
-              messages.add({'role': 'assistant', 'content': content});
-              streamingContent.value = '';
-              toolStatus.value = null;
-              isLoading.value = false;
-              voiceState.value = VoiceState.idle;
-              _fetchSuggestedTopic();
-              _playTtsIfEnabled(content);
-            }
-          }
-        } catch (e) {
+        bool didDone = false;
+        await for (final event in _api.streamChat(transcript, _sessionId)) {
           if (isClosed) return;
-          messages.add({'role': 'assistant', 'content': 'Error: $e'});
+          if (event['tool_call'] != null) {
+            final tool = event['tool_call'] as String? ?? '';
+            final args = event['args'] as Map<String, dynamic>?;
+            toolStatus.value = _toolStatusLabel(tool, args);
+          }
+          if (event['token'] != null) {
+            toolStatus.value = null;
+            streamingContent.value += event['token'] as String;
+          }
+          if (event['done'] == true) {
+            didDone = true;
+            final content = streamingContent.value;
+            messages.add({'role': 'assistant', 'content': content});
+            streamingContent.value = '';
+            toolStatus.value = null;
+            isLoading.value = false;
+            voiceState.value = VoiceState.idle;
+            _fetchSuggestedTopic();
+            _playTtsIfEnabled(content);
+            return;
+          }
+        }
+        if (!didDone && streamingContent.value.trim().isNotEmpty) {
+          final content = streamingContent.value;
+          messages.add({'role': 'assistant', 'content': content});
+          streamingContent.value = '';
+          _fetchSuggestedTopic();
+          _playTtsIfEnabled(content);
+        }
+      } catch (e) {
+        if (isClosed) return;
+        messages.add({'role': 'assistant', 'content': 'Error: $e'});
+        _voiceErrorSnackbar('Voice request failed');
+      } finally {
+        if (!isClosed) {
           voiceState.value = VoiceState.idle;
           isLoading.value = false;
+          streamingContent.value = '';
           toolStatus.value = null;
         }
-      } else {
-        voiceState.value = VoiceState.idle;
       }
     } else if (voiceState.value == VoiceState.idle) {
       final ok = await _audio.hasPermission();
-      if (!ok) return;
-      final path = await _audio.getTempPath();
-      await _audio.startRecording(path);
-      voiceState.value = VoiceState.recording;
+      if (!ok) {
+        _voiceErrorSnackbar('Microphone access is required for voice');
+        return;
+      }
+      try {
+        await _audio.stopPlayback();
+        await _speechTts.stopTts();
+        final available = await _speechTts.initStt();
+        if (!available) {
+          _voiceErrorSnackbar('Speech recognition not available');
+          return;
+        }
+        await _speechTts.startListening(onResult: (_) {});
+        voiceState.value = VoiceState.recording;
+      } catch (e) {
+        _voiceErrorSnackbar('Could not start listening: $e');
+      }
     }
   }
 
+  void _voiceErrorSnackbar(String message) {
+    Get.snackbar(
+      'Voice',
+      message,
+      backgroundColor: kCard,
+      colorText: kTextPrimary,
+      duration: const Duration(seconds: 3),
+    );
+  }
+
   // ── TTS ───────────────────────────────────────────────────────────────────────
+  // On-device TTS (flutter_tts). No backend.
 
   Future<void> _playTtsIfEnabled(String content) async {
+    if (!speakResponses.value) return;
     if (content.trim().isEmpty) return;
     try {
-      final bytes = await _api.getTtsAudio(content);
-      if (bytes != null && bytes.isNotEmpty && !isClosed) {
-        await _audio.playTtsFromBytes(bytes);
+      await _speechTts.speak(content);
+    } catch (e) {
+      if (isClosed) return;
+      if (inputMode.value == InputMode.voice) {
+        _voiceErrorSnackbar('Could not play voice: $e');
       }
-    } catch (_) {}
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────

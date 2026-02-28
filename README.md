@@ -11,17 +11,17 @@ A fully local, voice + text interview preparation study companion. Flutter front
 - **Weak area tracking** — Silently scores understanding per topic; suggests what to study next
 - **Company research** — Pastes a company name or JD; fetches interview patterns from LeetCode, Blind, Glassdoor, GitHub
 - **Progress screen** — View weak/strong topics, tap to jump into chat with suggested topics
-- **100% local** — No cloud databases, no API keys; Ollama + Whisper + pyttsx3 run on your machine
+- **100% local** — No cloud databases, no API keys; Ollama runs on your machine; STT/TTS run on-device in Flutter
 
 ## Tech Stack
 
 | Layer   | Technologies                                      |
 |---------|---------------------------------------------------|
-| Frontend| Flutter (macOS), http, record, provider           |
-| Backend | FastAPI, uvicorn, SSE streaming                   |
-| LLM     | Ollama (qwen3 with agent/tool calling)          |
-| STT     | faster-whisper                                    |
-| TTS     | pyttsx3 (server-side; v2: Kokoro → Flutter)       |
+| Frontend| Flutter (macOS/web), GetX, speech_to_text, flutter_tts, gpt_markdown |
+| Backend | FastAPI, uvicorn, SSE streaming (text-only)       |
+| LLM     | Ollama (qwen3 with agent/tool calling)            |
+| STT     | speech_to_text (on-device; Flutter)               |
+| TTS     | flutter_tts (on-device; Flutter)                  |
 | Research| ddgs (DuckDuckGo), BeautifulSoup                  |
 
 ## Quick Start
@@ -90,12 +90,11 @@ Backend runs at http://127.0.0.1:8000.
 
 ```
 studia/
-├── backend/              # FastAPI Python backend
-│   ├── main.py           # Routes: /chat, /voice, /research, /progress, /session/history
+├── backend/              # FastAPI Python backend (text-only; no STT/TTS)
+│   ├── main.py           # Routes: /chat, /research, /progress, /session/history, profile
 │   ├── config.py         # Settings, BACKEND_ROOT
 │   ├── core/             # LLM, agent, context
 │   ├── services/         # Research, session, tracker, tools, profile_builder
-│   ├── audio/            # STT, TTS
 │   ├── profile.json      # Your profile (created by onboarding or manual)
 │   ├── curriculum.json   # Topic taxonomy
 │   └── progress.json    # Auto-created topic scores
@@ -103,7 +102,7 @@ studia/
 │   └── lib/
 │       ├── screens/      # Chat, Progress, Onboarding
 │       ├── widgets/      # Message bubble, voice button, topic chips
-│       └── services/     # API, audio recording
+│       └── services/     # API, audio, speech_tts (STT/TTS on-device)
 ├── start.sh              # Starts Ollama + backend
 └── stop.sh               # Stops both
 ```
@@ -114,15 +113,14 @@ studia/
 |---------------------------|--------|--------------------------------------------------|
 | `/profile/status`         | GET    | `{ "exists": true \| false }` — for onboarding   |
 | `/profile/from-uploads`   | POST   | Multipart: resumes (PDF/DOCX/TXT) + linkedin ZIP → creates profile.json |
-| `/chat`                   | POST   | Text chat; SSE stream (503 if no profile)        |
-| `/voice`                  | POST   | WAV audio → transcript + SSE stream               |
+| `/chat`                   | POST   | Text chat; SSE stream (503 if no profile). Voice: Flutter does STT on-device, then sends transcript here. |
 | `/research`               | POST   | Company or JD research                           |
 | `/progress`               | GET    | Weak/strong topics, suggested next               |
 | `/session/history`        | GET    | Conversation history for session                 |
 
 ## Configuration
 
-- **Backend**: `backend/config.py` — model (`qwen3`), `AGENT_MODE` (tool calling), Whisper size, TTS on/off, history limits
+- **Backend**: `backend/config.py` — model (`qwen3`), `AGENT_MODE` (tool calling), history limits
 - **Profile**: `backend/profile.json` — loaded on every request (hot reload)
 - **Curriculum**: `backend/curriculum.json` — topic IDs, labels, keywords
 - **Frontend API URL**: `frontend/lib/services/api_service.dart` — `baseUrl` (default `http://127.0.0.1:8000`). Change if backend runs elsewhere.
@@ -136,13 +134,12 @@ Things that may break or need updates as third parties change:
 | **Ollama model** | `qwen3` — Ollama can rename/remove models. Update `config.py` if the model name changes. Set `AGENT_MODE=False` to fall back to plain LLM without tools. |
 | **ddgs** | DuckDuckGo search for company research. Rate limits or API changes can affect `/research`. |
 | **Research sources** | LeetCode, Blind, Glassdoor, GitHub — site structure or scraping policies can change. Spec already notes Glassdoor blocks direct fetch. |
-| **faster-whisper** | Pulls models from Hugging Face; model availability may change. |
-| **pyttsx3** | Uses system TTS; behavior differs by OS. |
+| **speech_to_text / flutter_tts** | On-device; behavior depends on platform/browser. |
 
 ## Roadmap
 
 - **v1** (current): Onboarding from resumes + LinkedIn, agent AI with tools, text + voice chat, progress tracking, company research, JD paste
-- **v2**: Dark mode, Kokoro TTS, spaced repetition, export notes
+- **v2**: Spaced repetition, export notes
 
 ## What stays local (gitignored)
 

@@ -20,17 +20,20 @@ class _ChatScreenState extends State<ChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   late final Worker _messagesWorker;
+  late final Worker _streamingWorker;
 
   @override
   void initState() {
     super.initState();
     _ctrl = Get.find<ChatController>();
     _messagesWorker = ever(_ctrl.messages, (_) => _scrollToBottom());
+    _streamingWorker = ever(_ctrl.streamingContent, (_) => _scrollToBottom());
   }
 
   @override
   void dispose() {
     _messagesWorker.dispose();
+    _streamingWorker.dispose();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();

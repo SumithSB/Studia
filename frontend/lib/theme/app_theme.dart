@@ -54,7 +54,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.transparent,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: kCard,
         surfaceTintColor: Colors.transparent,
         elevation: 0,

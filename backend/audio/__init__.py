@@ -1,1 +1,1 @@
-"""Speech-to-text and text-to-speech."""
+# Audio package (STT/TTS moved to Flutter; backend is text-only).

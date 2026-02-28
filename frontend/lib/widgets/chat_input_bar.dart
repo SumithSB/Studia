@@ -188,7 +188,41 @@ class ChatInputBar extends GetView<ChatController> {
                     ],
                   ),
                 ] else ...[
-                  // Voice mode input row
+                  // Voice mode: Cursor-style — mic primary, optional text
+                  if (controller.voiceState.value == VoiceState.recording)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Listening… Tap stop to send',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: kTextSecondary,
+                        ),
+                      ),
+                    )
+                  else if (loading ||
+                      controller.voiceState.value == VoiceState.processing)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Thinking…',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: kTextSecondary,
+                        ),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Tap mic to speak',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: kTextSecondary,
+                        ),
+                      ),
+                    ),
                   Row(
                     children: [
                       Expanded(
