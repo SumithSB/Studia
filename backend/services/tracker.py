@@ -2,14 +2,15 @@
 
 import json
 from datetime import datetime
-from pathlib import Path
 
-CURRICULUM_PATH = Path(__file__).parent / "curriculum.json"
-PROGRESS_PATH = Path(__file__).parent / "progress.json"
-PROFILE_PATH = Path(__file__).parent / "profile.json"
+from config import BACKEND_ROOT
+
+CURRICULUM_PATH = BACKEND_ROOT / "curriculum.json"
+PROGRESS_PATH = BACKEND_ROOT / "progress.json"
+PROFILE_PATH = BACKEND_ROOT / "profile.json"
 
 
-def _load_json(path: Path, default: dict) -> dict:
+def _load_json(path, default: dict) -> dict:
     if path.exists():
         with open(path, encoding="utf-8") as f:
             return json.load(f)

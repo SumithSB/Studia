@@ -1,6 +1,7 @@
 """Text-to-speech via pyttsx3 (server-side playback)."""
 
 import threading
+
 from config import TTS_ENABLED, TTS_RATE
 
 

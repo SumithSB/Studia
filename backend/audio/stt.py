@@ -1,9 +1,8 @@
 """Whisper speech-to-text via faster-whisper."""
 
 import io
-from pathlib import Path
 
-from config import WHISPER_MODEL_SIZE, WHISPER_DEVICE, SAMPLE_RATE
+from config import SAMPLE_RATE, WHISPER_DEVICE, WHISPER_MODEL_SIZE
 
 
 def transcribe(audio_bytes: bytes) -> str:

@@ -3,6 +3,7 @@
 import json
 import re
 import requests
+
 from config import OLLAMA_BASE_URL, OLLAMA_MODEL
 
 THINK_PATTERN = re.compile(r"<think>.*?</think>", re.DOTALL)

@@ -2,23 +2,19 @@
 
 import json
 from fastapi import FastAPI, UploadFile, Form
-from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from audio import stt, tts
+from config import AGENT_MODE, TTS_ENABLED
+from core import agent, context, llm
+from services import research, session, tracker
 
 
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
-
-import context
-import session
-import tracker
-import research
-import llm
-import stt
-import tts
-from config import TTS_ENABLED
 
 app = FastAPI(title="Studia")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -26,6 +22,15 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 def _sse_event(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
+
+
+def _stream_response(messages: list[dict], session_id: str):
+    """Unified stream: yields (token, done, tool_info)."""
+    if AGENT_MODE:
+        yield from agent.agent_stream(messages, session_id)
+    else:
+        for token, done, _ in llm.stream_completion(messages):
+            yield (token, done, None)
 
 
 @app.post("/chat")
@@ -48,13 +53,16 @@ def chat_endpoint(req: ChatRequest):
             ],
         ]
         full_response = []
-        for token, done, _ in llm.stream_completion(messages):
+        for token, done, tool_info in _stream_response(messages, session_id):
+            if tool_info:
+                yield _sse_event({"tool_call": tool_info.get("tool"), "args": tool_info.get("args", {})})
             if token:
                 full_response.append(token)
                 yield _sse_event({"token": token})
             if done:
                 content = "".join(full_response)
-                session.add_exchange(session_id, "assistant", content)
+                if content:
+                    session.add_exchange(session_id, "assistant", content)
                 if TTS_ENABLED and content:
                     tts.speak(content)
                 yield _sse_event({"done": True})
@@ -90,13 +98,16 @@ def voice_endpoint(audio: UploadFile = ..., session_id: str = Form("default")):
             ],
         ]
         full_response = []
-        for token, done, _ in llm.stream_completion(messages):
+        for token, done, tool_info in _stream_response(messages, session_id):
+            if tool_info:
+                yield _sse_event({"tool_call": tool_info.get("tool"), "args": tool_info.get("args", {})})
             if token:
                 full_response.append(token)
                 yield _sse_event({"token": token})
             if done:
                 content = "".join(full_response)
-                session.add_exchange(session_id, "assistant", content)
+                if content:
+                    session.add_exchange(session_id, "assistant", content)
                 if TTS_ENABLED and content:
                     tts.speak(content)
                 yield _sse_event({"done": True})

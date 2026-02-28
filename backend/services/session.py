@@ -2,12 +2,10 @@
 
 import json
 from datetime import datetime
-from pathlib import Path
 
-from config import MAX_HISTORY_EXCHANGES, LOG_SESSIONS
+from config import BACKEND_ROOT, LOG_SESSIONS, MAX_HISTORY_EXCHANGES
 
-
-SESSIONS_DIR = Path(__file__).parent / "sessions"
+SESSIONS_DIR = BACKEND_ROOT / "sessions"
 SESSIONS_DIR.mkdir(exist_ok=True)
 
 _sessions: dict[str, dict] = {}

@@ -2,11 +2,16 @@
 
 import json
 from datetime import datetime, timedelta
-from pathlib import Path
 
-from config import OLLAMA_BASE_URL, OLLAMA_MODEL, RESEARCH_CACHE_DAYS, RESEARCH_MAX_SOURCES
+from config import (
+    BACKEND_ROOT,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    RESEARCH_CACHE_DAYS,
+    RESEARCH_MAX_SOURCES,
+)
 
-CACHE_PATH = Path(__file__).parent / "sessions" / "research_cache.json"
+CACHE_PATH = BACKEND_ROOT / "sessions" / "research_cache.json"
 CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -101,8 +106,8 @@ def research_company(company: str) -> dict:
 def parse_jd(jd_text: str) -> dict:
     """Parse job description and return gap analysis."""
     import requests
-    from pathlib import Path
-    profile_path = Path(__file__).parent / "profile.json"
+
+    profile_path = BACKEND_ROOT / "profile.json"
     with open(profile_path, encoding="utf-8") as f:
         profile = json.load(f)
 

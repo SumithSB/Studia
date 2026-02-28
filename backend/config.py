@@ -1,7 +1,13 @@
 """Configuration for Studia backend."""
 
-OLLAMA_MODEL = "deepseek-r1:8b"
+from pathlib import Path
+
+BACKEND_ROOT = Path(__file__).resolve().parent
+
+OLLAMA_MODEL = "qwen3"
 OLLAMA_BASE_URL = "http://localhost:11434"
+AGENT_MODE = True
+MAX_AGENT_TURNS = 5
 WHISPER_MODEL_SIZE = "base.en"
 WHISPER_DEVICE = "cpu"
 SAMPLE_RATE = 16000
