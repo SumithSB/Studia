@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import '../theme/app_theme.dart';
 
-class MessageBubble extends StatelessWidget {
-  final String content;
-  final bool isUser;
-  final String? topicId;
-
+class MessageBubble extends StatefulWidget {
   const MessageBubble({
     super.key,
     required this.content,
@@ -12,40 +10,225 @@ class MessageBubble extends StatelessWidget {
     this.topicId,
   });
 
+  final String content;
+  final bool isUser;
+  final String? topicId;
+
+  @override
+  State<MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<MessageBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(
+        position: _slide,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: widget.isUser
+              ? _UserBubble(content: widget.content)
+              : _AssistantBubble(content: widget.content),
+        ),
+      ),
+    );
+  }
+}
+
+// ── User bubble ──────────────────────────────────────────────────────────────
+
+class _UserBubble extends StatelessWidget {
+  const _UserBubble({required this.content});
+  final String content;
+
   @override
   Widget build(BuildContext context) {
     return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: Alignment.centerRight,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isUser ? Theme.of(context).colorScheme.primary : Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(16),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.72,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              content,
-              style: TextStyle(
-                color: isUser ? Colors.white : Colors.black87,
-                fontSize: 16,
+        margin: const EdgeInsets.only(left: 48),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: const BoxDecoration(
+          color: kAccentPurple,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(4),
+            bottomLeft: Radius.circular(18),
+            bottomRight: Radius.circular(18),
+          ),
+        ),
+        child: Text(
+          content,
+          style: const TextStyle(
+            color: kTextPrimary,
+            fontSize: 15,
+            height: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Assistant bubble ─────────────────────────────────────────────────────────
+
+class _AssistantBubble extends StatelessWidget {
+  const _AssistantBubble({required this.content});
+  final String content;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Avatar
+          Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.only(right: 10, top: 2),
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [kAccentPurple, kAccentBlue],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
-            if (topicId != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  topicId!,
-                  style: TextStyle(
-                    color: isUser ? Colors.white70 : Colors.grey.shade600,
-                    fontSize: 12,
+            child: const Center(
+              child: Text(
+                'S',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          // Bubble
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: kCard,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(18),
+                ),
+                border: Border.all(color: kDivider, width: 1),
+              ),
+              child: MarkdownBody(
+                data: content,
+                softLineBreak: true,
+                styleSheet: MarkdownStyleSheet(
+                  p: const TextStyle(
+                    color: kTextPrimary,
+                    fontSize: 15,
+                    height: 1.55,
+                  ),
+                  strong: const TextStyle(
+                    color: kTextPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  em: const TextStyle(
+                    color: kTextPrimary,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  h1: const TextStyle(
+                    color: kTextPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    height: 1.4,
+                  ),
+                  h2: const TextStyle(
+                    color: kTextPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                  h3: const TextStyle(
+                    color: kTextPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                  code: const TextStyle(
+                    backgroundColor: Color(0xFF2A2A2A),
+                    color: kAccentBlue,
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                  ),
+                  codeblockDecoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: kDivider),
+                  ),
+                  codeblockPadding: const EdgeInsets.all(12),
+                  blockquote: const TextStyle(
+                    color: kTextSecondary,
+                    fontSize: 15,
+                    height: 1.5,
+                  ),
+                  blockquotePadding: const EdgeInsets.only(
+                      left: 12, top: 4, bottom: 4),
+                  blockquoteDecoration: const BoxDecoration(
+                    border: Border(
+                      left: BorderSide(color: kAccentPurple, width: 3),
+                    ),
+                  ),
+                  listBullet: const TextStyle(
+                    color: kTextSecondary,
+                    fontSize: 15,
+                  ),
+                  listIndent: 20,
+                  tableHead: const TextStyle(
+                    color: kTextPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  tableBody: const TextStyle(color: kTextPrimary),
+                  tableBorder: TableBorder.all(color: kDivider, width: 1),
+                  horizontalRuleDecoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: kDivider)),
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }

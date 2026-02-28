@@ -1,223 +1,98 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../widgets/message_bubble.dart';
-import '../widgets/voice_button.dart';
-import '../services/api_service.dart';
-import '../services/audio_service.dart';
-import 'progress_screen.dart';
+import 'package:get/get.dart';
+
+import '../controllers/chat_controller.dart';
+import '../routes/app_routes.dart';
+import '../theme/app_theme.dart';
+import '../widgets/app_logo.dart';
+import '../widgets/chat_input_bar.dart';
+import '../widgets/message_list.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key, this.initialTopic});
-
-  final String? initialTopic;
+  const ChatScreen({super.key});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final _api = ApiService();
-  final _audio = AudioService();
-  final _controller = TextEditingController();
+  late final ChatController _ctrl;
+  final _textController = TextEditingController();
   final _scrollController = ScrollController();
-
-  List<Map<String, String>> _messages = [];
-  String _streamingContent = '';
-  bool _isLoading = false;
-  VoiceState _voiceState = VoiceState.idle;
-  String _sessionId = 'default';
+  late final Worker _messagesWorker;
 
   @override
   void initState() {
     super.initState();
-    _loadSession();
-    if (widget.initialTopic != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _sendMessage('Let\'s talk about ${widget.initialTopic}');
-      });
-    }
+    _ctrl = Get.find<ChatController>();
+    _messagesWorker = ever(_ctrl.messages, (_) => _scrollToBottom());
   }
 
-  Future<void> _loadSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final sid = prefs.getString('session_id');
-    if (sid != null) {
-      setState(() => _sessionId = sid);
-    } else {
-      final newId = DateTime.now().millisecondsSinceEpoch.toString();
-      await prefs.setString('session_id', newId);
-      setState(() => _sessionId = newId);
-    }
-    try {
-      final history = await _api.getSessionHistory(_sessionId);
-      setState(() {
-        _messages = history
-            .map((e) => {
-                  'role': e['role'] as String? ?? 'user',
-                  'content': e['content'] as String? ?? '',
-                })
-            .toList();
-      });
-    } catch (_) {}
+  @override
+  void dispose() {
+    _messagesWorker.dispose();
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
-  Future<void> _sendMessage(String text) async {
-    if (text.trim().isEmpty || _isLoading) return;
-    setState(() {
-      _messages.add({'role': 'user', 'content': text});
-      _isLoading = true;
-      _streamingContent = '';
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
     });
-    _controller.clear();
-
-    try {
-      await for (final event in _api.streamChat(text, _sessionId)) {
-        if (!mounted) return;
-        if (event['transcript'] != null) {
-          // voice first event
-          setState(() {
-            _messages.add({'role': 'user', 'content': event['transcript']});
-          });
-        }
-        if (event['token'] != null) {
-          setState(() => _streamingContent += event['token']);
-        }
-        if (event['done'] == true) {
-          setState(() {
-            _messages.add({'role': 'assistant', 'content': _streamingContent});
-            _streamingContent = '';
-            _isLoading = false;
-          });
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _messages.add({'role': 'assistant', 'content': 'Error: $e'});
-        _isLoading = false;
-        _streamingContent = '';
-      });
-    }
-    if (mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      });
-    }
-  }
-
-  Future<void> _toggleVoice() async {
-    if (_voiceState == VoiceState.recording) {
-      setState(() => _voiceState = VoiceState.processing);
-      final path = await _audio.stopRecording();
-      if (path != null) {
-        final bytes = await _audio.getRecordedBytes(path);
-        try {
-          await for (final event in _api.streamVoice(bytes, _sessionId)) {
-            if (!mounted) return;
-            if (event['transcript'] != null) {
-              setState(() {
-                _messages.add({'role': 'user', 'content': event['transcript']});
-              });
-            }
-            if (event['token'] != null) {
-              setState(() => _streamingContent += event['token']);
-            }
-            if (event['done'] == true) {
-              setState(() {
-                _messages.add({'role': 'assistant', 'content': _streamingContent});
-                _streamingContent = '';
-                _voiceState = VoiceState.idle;
-              });
-            }
-          }
-        } catch (e) {
-          setState(() {
-            _messages.add({'role': 'assistant', 'content': 'Error: $e'});
-            _voiceState = VoiceState.idle;
-          });
-        }
-      } else {
-        setState(() => _voiceState = VoiceState.idle);
-      }
-    } else if (_voiceState == VoiceState.idle) {
-      final ok = await _audio.hasPermission();
-      if (!ok) return;
-      final path = await _audio.getTempPath();
-      await _audio.startRecording(path);
-      setState(() => _voiceState = VoiceState.recording);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Studia'),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppLogo(size: 28),
+            SizedBox(width: 10),
+            Text('Studia'),
+          ],
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.analytics),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ProgressScreen(),
+          // Volume toggle — reactive to speakResponses state
+          Obx(() => IconButton(
+                icon: Icon(
+                  _ctrl.speakResponses.value
+                      ? Icons.volume_up_rounded
+                      : Icons.volume_off_rounded,
+                  color: _ctrl.speakResponses.value
+                      ? kAccentPurple
+                      : kTextSecondary,
                 ),
-              );
-            },
+                onPressed: () =>
+                    _ctrl.setSpeakResponses(!_ctrl.speakResponses.value),
+                tooltip: _ctrl.speakResponses.value
+                    ? 'Speaking on'
+                    : 'Speaking off',
+              )),
+          IconButton(
+            icon: const Icon(Icons.bar_chart_rounded),
+            onPressed: () => Get.toNamed(Routes.progress),
+            tooltip: 'Progress',
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: kDivider),
+        ),
       ),
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(8),
-              itemCount: _messages.length + (_streamingContent.isNotEmpty ? 1 : 0),
-              itemBuilder: (_, i) {
-                if (i < _messages.length) {
-                  final m = _messages[i];
-                  return MessageBubble(
-                    content: m['content']!,
-                    isUser: m['role'] == 'user',
-                  );
-                }
-                return MessageBubble(
-                  content: _streamingContent,
-                  isUser: false,
-                );
-              },
-            ),
+            child: MessageList(scrollController: _scrollController),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: const InputDecoration(
-                      hintText: 'Type a message...',
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: _sendMessage,
-                    enabled: !_isLoading,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: _isLoading
-                      ? null
-                      : () => _sendMessage(_controller.text),
-                ),
-                VoiceButton(state: _voiceState, onPressed: _toggleVoice),
-              ],
-            ),
-          ),
+          ChatInputBar(textController: _textController),
         ],
       ),
     );
