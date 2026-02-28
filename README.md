@@ -4,7 +4,9 @@ A fully local, voice + text interview preparation study companion. Flutter front
 
 ## Features
 
+- **First-time onboarding** — On first launch, upload resumes (PDF, DOCX, TXT) and your LinkedIn data export (ZIP); the AI builds your profile automatically.
 - **Text & voice chat** — Type or speak; get streaming LLM responses with ChatGPT-style token-by-token rendering
+- **Agent AI** — The model can call tools (company research, JD parsing, progress lookup, curriculum, topic scoring) when relevant.
 - **Profile-aware** — Adapts to your background, strengths, and areas to improve via `profile.json`
 - **Weak area tracking** — Silently scores understanding per topic; suggests what to study next
 - **Company research** — Pastes a company name or JD; fetches interview patterns from LeetCode, Blind, Glassdoor, GitHub
@@ -54,13 +56,12 @@ cd frontend
 flutter pub get
 ```
 
-### 4. Customize your profile
+### 4. Profile (first run)
 
-```bash
-cp backend/profile.example.json backend/profile.json
-```
+- **Option A:** Run the app; when no profile exists you’ll see the onboarding screen. Upload one or more resumes (PDF, DOCX, TXT) and your LinkedIn “Download your data” ZIP. The AI generates `profile.json` from them.
+- **Option B:** Manually: `cp backend/profile.example.json backend/profile.json` and edit it.
 
-Edit `backend/profile.json` with your experience, target roles, strong areas, and areas to improve. (This file is gitignored — your personal data stays local.)
+(Profile is gitignored — your data stays local.)
 
 ### 5. Run
 
@@ -93,14 +94,14 @@ studia/
 │   ├── main.py           # Routes: /chat, /voice, /research, /progress, /session/history
 │   ├── config.py         # Settings, BACKEND_ROOT
 │   ├── core/             # LLM, agent, context
-│   ├── services/         # Research, session, tracker, tools
+│   ├── services/         # Research, session, tracker, tools, profile_builder
 │   ├── audio/            # STT, TTS
-│   ├── profile.json      # Your profile (edit freely)
+│   ├── profile.json      # Your profile (created by onboarding or manual)
 │   ├── curriculum.json   # Topic taxonomy
 │   └── progress.json    # Auto-created topic scores
 ├── frontend/             # Flutter app
 │   └── lib/
-│       ├── screens/      # Chat, Progress
+│       ├── screens/      # Chat, Progress, Onboarding
 │       ├── widgets/      # Message bubble, voice button, topic chips
 │       └── services/     # API, audio recording
 ├── start.sh              # Starts Ollama + backend
@@ -109,13 +110,15 @@ studia/
 
 ## API Reference
 
-| Endpoint             | Method | Description                          |
-|----------------------|--------|--------------------------------------|
-| `/chat`              | POST   | Text chat; SSE stream                |
-| `/voice`             | POST   | WAV audio → transcript + SSE stream |
-| `/research`          | POST   | Company or JD research               |
-| `/progress`          | GET    | Weak/strong topics, suggested next   |
-| `/session/history`   | GET    | Conversation history for session     |
+| Endpoint                  | Method | Description                                      |
+|---------------------------|--------|--------------------------------------------------|
+| `/profile/status`         | GET    | `{ "exists": true \| false }` — for onboarding   |
+| `/profile/from-uploads`   | POST   | Multipart: resumes (PDF/DOCX/TXT) + linkedin ZIP → creates profile.json |
+| `/chat`                   | POST   | Text chat; SSE stream (503 if no profile)        |
+| `/voice`                  | POST   | WAV audio → transcript + SSE stream               |
+| `/research`               | POST   | Company or JD research                           |
+| `/progress`               | GET    | Weak/strong topics, suggested next               |
+| `/session/history`        | GET    | Conversation history for session                 |
 
 ## Configuration
 
@@ -138,8 +141,8 @@ Things that may break or need updates as third parties change:
 
 ## Roadmap
 
-- **v1** (current): Text + voice chat, progress tracking, company research, JD paste
-- **v2**: Dark mode, Kokoro TTS, PDF JD upload, spaced repetition, export notes
+- **v1** (current): Onboarding from resumes + LinkedIn, agent AI with tools, text + voice chat, progress tracking, company research, JD paste
+- **v2**: Dark mode, Kokoro TTS, spaced repetition, export notes
 
 ## What stays local (gitignored)
 
@@ -148,4 +151,4 @@ Things that may break or need updates as third parties change:
 - `backend/sessions/*.json` — session logs and research cache
 - `.env` — any API keys or secrets (none required for local use)
 
-Copy `profile.example.json` to `profile.json` to get started.
+Use onboarding in the app to create `profile.json` from uploads, or copy `profile.example.json` to `profile.json` and edit manually.

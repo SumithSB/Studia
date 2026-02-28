@@ -15,9 +15,10 @@
 ┌────────────────────▼────────────────────────────┐
 │           FastAPI Backend (Python)               │
 │                                                  │
-│  ┌─────────┐ ┌─────────┐ ┌──────────────────┐  │
-│  │  /chat  │ │ /voice  │ │    /research      │  │
-│  └────┬────┘ └────┬────┘ └────────┬─────────┘  │
+│  ┌─────────┐ ┌─────────┐ ┌────────────┐ ┌──────────────┐  │
+│  │/profile │ │  /chat  │ │  /voice    │ │  /research   │  │
+│  │ status  │ │         │ │            │ │              │  │
+│  └────┬────┘ └────┬────┘ └─────┬─────┘ └──────┬───────┘  │
 │       │           │               │              │
 │  ┌────▼───────────▼───┐  ┌────────▼──────────┐  │
 │  │   context.py       │  │   research.py      │  │
@@ -61,7 +62,8 @@ studia/
 │   │   ├── research.py              # Company/JD research and scraping
 │   │   ├── session.py               # Session state and history
 │   │   ├── tools.py                 # Tool definitions and executor
-│   │   └── tracker.py               # Weak area tracker
+│   │   ├── tracker.py               # Weak area tracker
+│   │   └── profile_builder.py       # Extract text from resumes/LinkedIn ZIP; LLM → profile.json
 │   ├── audio/                       # Speech
 │   │   ├── stt.py                   # Whisper speech-to-text
 │   │   └── tts.py                   # pyttsx3 text-to-speech
@@ -77,8 +79,9 @@ studia/
 │   ├── lib/
 │   │   ├── main.dart
 │   │   ├── screens/
-│   │   │   ├── chat_screen.dart     # Main chat UI
-│   │   │   └── progress_screen.dart # Topic progress view
+│   │   │   ├── chat_screen.dart       # Main chat UI
+│   │   │   ├── onboarding_screen.dart # First-run: upload resumes + LinkedIn ZIP
+│   │   │   └── progress_screen.dart  # Topic progress view
 │   │   ├── widgets/
 │   │   │   ├── message_bubble.dart  # Chat message component
 │   │   │   ├── voice_button.dart    # Record button with states
@@ -139,8 +142,28 @@ echo "Stopped."
 
 ### API Endpoints
 
+#### `GET /profile/status`
+Used by the frontend to decide whether to show onboarding or chat.
+
+**Response:**
+```json
+{ "exists": true }
+```
+or `{ "exists": false }` when `profile.json` is missing.
+
+#### `POST /profile/from-uploads`
+Creates `profile.json` from uploaded resumes and optional LinkedIn export.
+
+**Request:** `multipart/form-data` with:
+- `resumes`: one or more files (PDF, DOCX, TXT)
+- `linkedin`: optional single file (ZIP from LinkedIn “Download your data”)
+
+**Processing:** Text is extracted from each file (pypdf, python-docx, zipfile/CSV); combined text is sent to Ollama with the profile schema; the model returns JSON that is written to `backend/profile.json`.
+
+**Response:** `{ "ok": true, "profile": { ... } }` on success; 4xx with message on failure.
+
 #### `POST /chat`
-Main text conversation endpoint. Accepts a message, returns a streaming response.
+Main text conversation endpoint. Accepts a message, returns a streaming response. Returns **503** if `profile.json` does not exist (user must complete onboarding first).
 
 **Request:**
 ```json
@@ -160,7 +183,7 @@ data: {"done": true, "topic_detected": "python.advanced.async_event_loop"}
 ```
 
 #### `POST /voice`
-Accepts a WAV audio file, transcribes it with Whisper, sends to `/chat` logic, and returns both transcript and streaming bot response in a single response — same pattern as `/chat`.
+Accepts a WAV audio file, transcribes it with Whisper, sends to `/chat` logic, and returns both transcript and streaming bot response in a single response — same pattern as `/chat`. Returns **503** if profile does not exist.
 
 **Request:** `multipart/form-data` with `audio` field (WAV file) and `session_id`
 
@@ -261,7 +284,7 @@ When `AGENT_MODE` is True, the chat/voice endpoints use `agent.agent_stream()` i
 
 ## 6. Your Profile (`backend/profile.json`)
 
-Edit this file freely — it is loaded fresh on every request so changes take effect immediately without restarting.
+Created on first run via onboarding (upload resumes + LinkedIn ZIP; see `GET /profile/status` and `POST /profile/from-uploads`) or by copying `profile.example.json`. Edit freely — it is loaded fresh on every request so changes take effect immediately without restarting.
 
 ```json
 {
@@ -540,9 +563,11 @@ beautifulsoup4
 ddgs
 pyttsx3
 python-multipart
+pypdf
+python-docx
 ```
 
-**Notes:** `ddgs` is the successor to duckduckgo-search. `sounddevice` removed — add back only if using faster-whisper with GPU audio I/O.
+**Notes:** `ddgs` is the successor to duckduckgo-search. `pypdf` and `python-docx` are used by `profile_builder` for resume text extraction. `sounddevice` removed — add back only if using faster-whisper with GPU audio I/O.
 
 ---
 
@@ -551,10 +576,9 @@ python-multipart
 ### Step 1: Install Ollama
 ```bash
 brew install ollama
-ollama pull deepseek-r1:8b
-# Optional but recommended for system design / AI topics:
-ollama pull qwen2.5:14b
+ollama pull qwen3
 ```
+(qwen3 supports tool calling for the agent; start Ollama with `ollama serve` before pulling.)
 
 ### Step 2: Python Backend
 ```bash
@@ -589,7 +613,7 @@ flutter run -d macos
 ## 14. v1 vs v2 Scope
 
 ### v1 — Build This First
-- [x] FastAPI backend with `/chat` (streaming), `/voice`, `/research`, `/progress` endpoints
+- [x] FastAPI backend with `/profile/status`, `/profile/from-uploads`, `/chat` (streaming), `/voice`, `/research`, `/progress` endpoints
 - [x] Flutter chat screen with streaming message rendering
 - [x] Voice recording — click to start, click to stop, send WAV to backend
 - [x] Text conversation — full chat interface
@@ -638,5 +662,6 @@ This project demonstrates the full stack of skills relevant to AI engineering ro
 - **pyttsx3 on macOS**: Blocking call — run in a background thread in FastAPI so it does not block the API response.
 - **Ollama must be running before backend starts**: `start.sh` handles this with a 2-second sleep after starting Ollama. If Ollama is slow to start, increase the sleep.
 - **profile.json hot reload**: The file is read on every `/chat` request so edits take effect immediately without restarting the backend.
+- **First-run onboarding**: If `profile.json` is missing, the app shows an onboarding screen; user uploads resumes (PDF, DOCX, TXT) and optional LinkedIn ZIP; `POST /profile/from-uploads` extracts text and uses Ollama to generate profile.json.
 - **Context window management** (`session.py`): After `MAX_HISTORY_EXCHANGES` turns, call Ollama with: "Summarise this interview prep conversation into a concise context block (max 400 words) preserving key topics discussed and user's level." Prepend the summary to subsequent requests; keep only the last 10 exchanges verbatim in the prompt. Store summarised block in session state; do not rewrite session files.
 - **Audio format**: Flutter `record` package outputs AAC by default on macOS. Use `RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1)` for WAV (PCM 16-bit, 16kHz mono) to match Whisper's expected input format.
