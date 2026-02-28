@@ -1,50 +1,36 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Studia Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. specs.md is the Source of Truth
+The root file `specs.md` is the authoritative specification. All implementation MUST follow it. No feature, API design, or architectural decision may contradict what is documented there. If implementation reveals a spec ambiguity or error, the spec MUST be updated before code proceeds.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Local-First, No Cloud
+All data (profile, progress, sessions, research cache) lives on the local filesystem. No cloud databases, no external API keys (aside from optional DuckDuckGo-style search). The app runs entirely on-device with Ollama, Whisper, and the FastAPI backend.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Spec Consistency Before Coding
+Resolve any spec inconsistencies from the review (voice API, TTS, curriculum, context window, etc.) before implementing. Do not code around spec gaps — fix the spec first, then implement.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Streaming by Default
+Chat and voice responses use SSE streaming. Tokens arrive one by one so the Flutter UI feels instant, like ChatGPT. Do not block on full LLM responses when streaming is specified.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Curriculum-Driven Progress
+Topic IDs and labels come from `curriculum.json`. Tracker and progress screen MUST use this taxonomy. Profile `needs_depth` is mapped to curriculum IDs via keyword overlap — no free-form topic IDs in progress.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Technology Stack
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+- **Backend**: FastAPI, Ollama (local LLM), faster-whisper (STT), pyttsx3 (v1 TTS), ddgs (research)
+- **Frontend**: Flutter, record (WAV 16kHz mono), provider, shared_preferences
+- **Start/Stop**: start.sh and stop.sh orchestrate Ollama and backend; backend does not subprocess Ollama
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+## Development Workflow
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- Implement features in order: backend core (config, llm, context) → endpoints → frontend
+- Run `/speckit.analyze` before `/speckit.implement` to validate consistency
+- Session logging and research cache are mandatory for v1
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+Constitution supersedes ad-hoc development practices. Amendments require updating this file and bumping the version. All PRs must verify compliance with principles I–V.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-02-28 | **Last Amended**: 2026-02-28

@@ -1,4 +1,4 @@
-# Interview Study Buddy — Full Build Specification
+# Studia — Full Build Specification
 
 > A fully local, voice + text interview preparation study companion. Flutter frontend (CV-worthy showcase project) talking to a FastAPI backend, powered by Ollama (local LLM), Whisper (local STT), and on-demand company research. Runs only when you need it. Feels like Claude/ChatGPT but knows everything about you.
 
@@ -48,7 +48,7 @@
 ## 2. Repository Structure
 
 ```
-interview-study-buddy/
+studia/
 │
 ├── backend/                         # FastAPI Python backend
 │   ├── main.py                      # FastAPI app, route definitions
@@ -97,7 +97,7 @@ interview-study-buddy/
 ### `start.sh`
 ```bash
 #!/bin/bash
-echo "Starting Interview Study Buddy..."
+echo "Starting Studia..."
 
 # Start Ollama
 ollama serve &
@@ -121,7 +121,7 @@ echo "Open the Flutter app or run: flutter run -d macos"
 ### `stop.sh`
 ```bash
 #!/bin/bash
-echo "Stopping Interview Study Buddy..."
+echo "Stopping Studia..."
 kill $(cat .backend.pid) 2>/dev/null
 kill $(cat .ollama.pid) 2>/dev/null
 rm -f .backend.pid .ollama.pid
@@ -615,7 +615,7 @@ This project demonstrates the full stack of skills relevant to AI engineering ro
 **Systems:** Local-first architecture, caching, session management, subprocess orchestration
 
 **Description for CV:**
-*"Built a fully local AI-powered interview preparation assistant using Flutter (frontend), FastAPI (backend), and Ollama (local LLM inference). Features voice and text conversation, profile-aware adaptive tutoring, real-time company interview data research, and cross-session weak area tracking. Runs entirely on-device with no API costs or rate limits."*
+*"Studia — a fully local AI-powered interview preparation assistant using Flutter (frontend), FastAPI (backend), and Ollama (local LLM inference). Features voice and text conversation, profile-aware adaptive tutoring, real-time company interview data research, and cross-session weak area tracking. Runs entirely on-device with no API costs or rate limits."*
 
 ---
 

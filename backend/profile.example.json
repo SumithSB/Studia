@@ -1,0 +1,31 @@
+{
+  "name": "Your Name",
+  "current_role": "Your current role or degree",
+  "consulting": "Consulting or part-time work if any",
+  "experience_years": 0,
+  "target_roles": ["Role 1", "Role 2"],
+  "target_market": "e.g. UK — full-time, remote, etc.",
+
+  "strong_areas": [
+    "Area 1",
+    "Area 2"
+  ],
+
+  "needs_depth": [
+    "Topic to improve 1",
+    "Topic to improve 2"
+  ],
+
+  "experience_highlights": [
+    "Highlight 1",
+    "Highlight 2"
+  ],
+
+  "interview_styles_to_prepare": [
+    "Technical rounds",
+    "System design",
+    "Behavioural"
+  ],
+
+  "study_style": "How you like to learn — e.g. Conversational, example-driven, etc."
+}

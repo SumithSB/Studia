@@ -1,0 +1,18 @@
+{
+  "topics": [
+    {"id": "python.internals.gil", "label": "The GIL", "category": "python.internals", "keywords": ["gil", "memory management", "cpython"]},
+    {"id": "python.internals.memory", "label": "Python Memory Management", "category": "python.internals", "keywords": ["memory", "gc", "reference counting"]},
+    {"id": "python.advanced.async_event_loop", "label": "Async and Event Loop", "category": "python.advanced", "keywords": ["async", "event loop", "asyncio"]},
+    {"id": "dsa.dp.1d", "label": "1D Dynamic Programming", "category": "dsa.dp", "keywords": ["dp", "dynamic programming", "1d"]},
+    {"id": "dsa.dp.2d_patterns", "label": "2D Dynamic Programming", "category": "dsa.dp", "keywords": ["2d dp", "grid dp"]},
+    {"id": "dsa.trees", "label": "Trees and Traversals", "category": "dsa", "keywords": ["trees", "bst", "traversal"]},
+    {"id": "dsa.graphs", "label": "Graphs and Algorithms", "category": "dsa", "keywords": ["graphs", "bfs", "dfs"]},
+    {"id": "system_design.rate_limiter", "label": "Rate Limiting", "category": "system_design", "keywords": ["rate limiter", "throttling"]},
+    {"id": "system_design.scale", "label": "System Design at Scale", "category": "system_design", "keywords": ["scaling", "distributed"]},
+    {"id": "ml.llm.rag_pipeline", "label": "RAG Pipeline Architecture", "category": "ml.llm", "keywords": ["rag", "retrieval", "embedding"]},
+    {"id": "ml.fundamentals", "label": "ML Fundamentals", "category": "ml", "keywords": ["bias variance", "gradient descent"]},
+    {"id": "ml.transformers", "label": "Transformer Architecture", "category": "ml.llm", "keywords": ["transformer", "attention"]},
+    {"id": "backend.reliability.observability", "label": "Observability and Reliability", "category": "backend", "keywords": ["observability", "logging", "metrics"]},
+    {"id": "sql.internals", "label": "SQL Internals and Query Optimisation", "category": "sql", "keywords": ["sql", "query optimization", "indexes"]}
+  ]
+}

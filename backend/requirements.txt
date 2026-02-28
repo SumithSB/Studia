@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+faster-whisper
+scipy
+numpy
+requests
+beautifulsoup4
+ddgs
+pyttsx3
+python-multipart
