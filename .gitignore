@@ -17,3 +17,5 @@ frontend/.packages
 *.iml
 .idea/
 .DS_Store
+.cursor/
+.specify/
