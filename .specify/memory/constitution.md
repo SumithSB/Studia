@@ -25,8 +25,8 @@ Topic IDs and labels come from `curriculum.json`. Tracker and progress screen MU
 
 ## Development Workflow
 
+- **Always use Spec Kit for feature implementation**: `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` → `/speckit.analyze` → `/speckit.implement`. Do not implement features directly without this workflow.
 - Implement features in order: backend core (config, llm, context) → endpoints → frontend
-- Run `/speckit.analyze` before `/speckit.implement` to validate consistency
 - Session logging and research cache are mandatory for v1
 
 ## Governance

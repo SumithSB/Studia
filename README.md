@@ -17,7 +17,7 @@ A fully local, voice + text interview preparation study companion. Flutter front
 |---------|---------------------------------------------------|
 | Frontend| Flutter (macOS), http, record, provider           |
 | Backend | FastAPI, uvicorn, SSE streaming                   |
-| LLM     | Ollama (deepseek-r1:8b, qwen2.5:14b)             |
+| LLM     | Ollama (qwen3 with agent/tool calling)          |
 | STT     | faster-whisper                                    |
 | TTS     | pyttsx3 (server-side; v2: Kokoro → Flutter)       |
 | Research| ddgs (DuckDuckGo), BeautifulSoup                  |
@@ -33,10 +33,10 @@ A fully local, voice + text interview preparation study companion. Flutter front
 ### 1. Pull the LLM model
 
 ```bash
-ollama pull deepseek-r1:8b
-# Optional for system design / AI topics:
-ollama pull qwen2.5:14b
+ollama pull qwen3
 ```
+
+(qwen3 supports tool calling; deepseek-r1 does not.)
 
 ### 2. Setup backend
 
@@ -91,16 +91,13 @@ Backend runs at http://127.0.0.1:8000.
 studia/
 ├── backend/              # FastAPI Python backend
 │   ├── main.py           # Routes: /chat, /voice, /research, /progress, /session/history
-│   ├── llm.py            # Ollama streaming, think-tag stripping
-│   ├── stt.py            # Whisper transcription
-│   ├── tts.py            # pyttsx3 (background thread)
-│   ├── context.py        # System prompt assembly
-│   ├── session.py        # History, context window management
-│   ├── tracker.py        # Weak area scoring, topic suggestion
-│   ├── research.py       # Company/JD scraping via ddgs
+│   ├── config.py         # Settings, BACKEND_ROOT
+│   ├── core/             # LLM, agent, context
+│   ├── services/         # Research, session, tracker, tools
+│   ├── audio/            # STT, TTS
 │   ├── profile.json      # Your profile (edit freely)
 │   ├── curriculum.json   # Topic taxonomy
-│   └── progress.json     # Auto-created topic scores
+│   └── progress.json    # Auto-created topic scores
 ├── frontend/             # Flutter app
 │   └── lib/
 │       ├── screens/      # Chat, Progress
@@ -122,7 +119,7 @@ studia/
 
 ## Configuration
 
-- **Backend**: `backend/config.py` — model, Whisper size, TTS on/off, history limits
+- **Backend**: `backend/config.py` — model (`qwen3`), `AGENT_MODE` (tool calling), Whisper size, TTS on/off, history limits
 - **Profile**: `backend/profile.json` — loaded on every request (hot reload)
 - **Curriculum**: `backend/curriculum.json` — topic IDs, labels, keywords
 - **Frontend API URL**: `frontend/lib/services/api_service.dart` — `baseUrl` (default `http://127.0.0.1:8000`). Change if backend runs elsewhere.
@@ -133,7 +130,7 @@ Things that may break or need updates as third parties change:
 
 | Dependency | What to watch |
 |------------|---------------|
-| **Ollama model** | `deepseek-r1:8b` — Ollama can rename/remove models. Update `config.py` if the model name changes. |
+| **Ollama model** | `qwen3` — Ollama can rename/remove models. Update `config.py` if the model name changes. Set `AGENT_MODE=False` to fall back to plain LLM without tools. |
 | **ddgs** | DuckDuckGo search for company research. Rate limits or API changes can affect `/research`. |
 | **Research sources** | LeetCode, Blind, Glassdoor, GitHub — site structure or scraping policies can change. Spec already notes Glassdoor blocks direct fetch. |
 | **faster-whisper** | Pulls models from Hugging Face; model availability may change. |

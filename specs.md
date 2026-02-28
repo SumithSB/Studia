@@ -22,7 +22,7 @@
 │  ┌────▼───────────▼───┐  ┌────────▼──────────┐  │
 │  │   context.py       │  │   research.py      │  │
 │  │   tracker.py       │  │   (scraping +      │  │
-│  │   llm.py (Ollama)  │  │    summarisation)  │  │
+│  │ agent+tools+llm    │  │    summarisation)  │  │
 │  └────────────────────┘  └───────────────────┘  │
 │                                                  │
 │  ┌─────────────────────────────────────────┐    │
@@ -32,7 +32,7 @@
                      │
 ┌────────────────────▼────────────────────────────┐
 │              Ollama (local LLM)                  │
-│         deepseek-r1:8b / qwen2.5:14b             │
+│         qwen3 (agent + tool calling)             │
 │         Runs only when backend is running        │
 └─────────────────────────────────────────────────┘
 ```
@@ -52,14 +52,19 @@ studia/
 │
 ├── backend/                         # FastAPI Python backend
 │   ├── main.py                      # FastAPI app, route definitions
-│   ├── llm.py                       # Ollama streaming interface
-│   ├── stt.py                       # Whisper speech-to-text
-│   ├── tts.py                       # pyttsx3 text-to-speech
-│   ├── research.py                  # Company/JD research and scraping
-│   ├── context.py                   # System prompt assembly
-│   ├── tracker.py                   # Weak area tracker
-│   ├── session.py                   # Session state and history
-│   ├── config.py                    # All settings
+│   ├── config.py                    # All settings, BACKEND_ROOT
+│   ├── core/                        # LLM, agent, context
+│   │   ├── agent.py                 # Agent loop with tool calling
+│   │   ├── context.py               # System prompt assembly
+│   │   └── llm.py                   # Ollama streaming interface
+│   ├── services/                    # Business logic
+│   │   ├── research.py              # Company/JD research and scraping
+│   │   ├── session.py               # Session state and history
+│   │   ├── tools.py                 # Tool definitions and executor
+│   │   └── tracker.py               # Weak area tracker
+│   ├── audio/                       # Speech
+│   │   ├── stt.py                   # Whisper speech-to-text
+│   │   └── tts.py                   # pyttsx3 text-to-speech
 │   ├── profile.json                 # Your profile — edit freely
 │   ├── curriculum.json              # Topic taxonomy (IDs, labels, category mapping)
 │   ├── progress.json                # Topic scores (auto-created)
@@ -231,7 +236,9 @@ Returns current session conversation history for UI restore on app reopen.
 ## 5. Backend — Configuration (`backend/config.py`)
 
 ```python
-OLLAMA_MODEL            = "deepseek-r1:8b"
+OLLAMA_MODEL            = "qwen3"
+AGENT_MODE              = True
+MAX_AGENT_TURNS         = 5
 OLLAMA_BASE_URL         = "http://localhost:11434"
 WHISPER_MODEL_SIZE      = "base.en"
 WHISPER_DEVICE          = "cpu"
@@ -245,6 +252,10 @@ RESEARCH_CACHE_DAYS     = 7
 BACKEND_HOST            = "127.0.0.1"
 BACKEND_PORT            = 8000
 ```
+
+When `AGENT_MODE` is True, the chat/voice endpoints use `agent.agent_stream()` instead of `llm.stream_completion()`. The agent passes tools to Ollama (qwen3). When the model returns `tool_calls`, the backend executes them via `tools.execute_tool()` and continues the loop until a text response or `MAX_AGENT_TURNS` is reached.
+
+**Tools:** `research_company`, `parse_jd`, `get_progress`, `lookup_curriculum`, `update_topic_score`. SSE may include `{"tool_call": "name", "args": {...}}` for frontend "Researching…" UI.
 
 ---
 
