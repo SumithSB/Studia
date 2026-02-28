@@ -26,7 +26,6 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = false;
   VoiceState _voiceState = VoiceState.idle;
   String _sessionId = 'default';
-  String? _recordingPath;
 
   @override
   void initState() {
@@ -148,10 +147,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!ok) return;
       final path = await _audio.getTempPath();
       await _audio.startRecording(path);
-      setState(() {
-        _voiceState = VoiceState.recording;
-        _recordingPath = path;
-      });
+      setState(() => _voiceState = VoiceState.recording);
     }
   }
 
