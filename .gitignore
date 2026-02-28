@@ -19,3 +19,5 @@ frontend/.packages
 .DS_Store
 .cursor/
 .specify/
+specs.md
+specs/
