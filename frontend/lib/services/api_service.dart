@@ -1,9 +1,44 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 const baseUrl = 'http://127.0.0.1:8000';
 
 class ApiService {
+  /// Returns true if profile.json exists (user has completed onboarding).
+  Future<bool> hasProfile() async {
+    final r = await http.get(Uri.parse('$baseUrl/profile/status'));
+    if (r.statusCode != 200) return false;
+    final map = jsonDecode(r.body) as Map<String, dynamic>;
+    return map['exists'] == true;
+  }
+
+  /// Build profile from resume files and optional LinkedIn ZIP. Throws on error.
+  Future<Map<String, dynamic>> uploadProfileFromFiles({
+    required List<http.MultipartFile> resumeFiles,
+    http.MultipartFile? linkedinZip,
+  }) async {
+    final uri = Uri.parse('$baseUrl/profile/from-uploads');
+    final req = http.MultipartRequest('POST', uri);
+    for (final f in resumeFiles) {
+      req.files.add(f);
+    }
+    if (linkedinZip != null) req.files.add(linkedinZip);
+
+    final streamed = await req.send();
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode >= 400) {
+      String msg = 'Failed to create profile';
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final d = body['detail'];
+        msg = d is List ? d.join(' ') : (d?.toString() ?? msg);
+      } catch (_) {}
+      throw Exception(msg);
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getProgress() async {
     final r = await http.get(Uri.parse('$baseUrl/progress'));
     if (r.statusCode != 200) throw Exception('Failed to load progress');
@@ -19,6 +54,18 @@ class ApiService {
     if (r.statusCode != 200) throw Exception('Failed to load history');
     final list = jsonDecode(r.body) as List;
     return list.map((e) => e as Map<String, dynamic>).toList();
+  }
+
+  /// Generate TTS audio for client playback. Returns bytes or null on failure.
+  Future<Uint8List?> getTtsAudio(String text) async {
+    if (text.trim().isEmpty) return null;
+    final r = await http.post(
+      Uri.parse('$baseUrl/tts'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'text': text}),
+    );
+    if (r.statusCode != 200) return null;
+    return r.bodyBytes;
   }
 
   Future<Map<String, dynamic>> research(String type, String value) async {
