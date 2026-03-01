@@ -19,4 +19,4 @@ echo $BACKEND_PID > ../.backend.pid
 
 cd ..
 echo "Backend running at http://127.0.0.1:8000"
-echo "Open the Flutter app or run: cd frontend && flutter run -d macos"
+echo "Open http://127.0.0.1:8000 in your browser for the web UI."

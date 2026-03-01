@@ -3,36 +3,38 @@
 import json
 import requests
 
-from config import OLLAMA_BASE_URL, OLLAMA_MODEL, MAX_AGENT_TURNS
+from config import OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT, MAX_AGENT_TURNS
+from core.llm import strip_think_tags
 from services import tools
 
 
-def _call_ollama(messages: list[dict], stream: bool = False) -> requests.Response:
-    """Call Ollama /api/chat with tools."""
+def _call_ollama(messages: list[dict], stream: bool = False, setup_mode: bool = False) -> requests.Response:
+    """Call Ollama /api/chat with tools. setup_mode: include create_profile tool."""
     url = f"{OLLAMA_BASE_URL}/api/chat"
+    tool_list = tools.TOOLS_SETUP if setup_mode else tools.TOOLS
     payload = {
         "model": OLLAMA_MODEL,
         "messages": messages,
         "stream": stream,
-        "tools": tools.TOOLS,
+        "tools": tool_list,
     }
-    return requests.post(url, json=payload, stream=stream, timeout=120)
+    return requests.post(url, json=payload, stream=stream, timeout=OLLAMA_TIMEOUT)
 
 
-def agent_stream(messages: list[dict], session_id: str):
-    """Run agent loop with tool calls. Yields (token, done, tool_call_info)."""
+def agent_stream(messages: list[dict], session_id: str, setup_mode: bool = False):
+    """Run agent loop with tool calls. Yields (token, done, tool_call_info). setup_mode: use tools that include create_profile."""
     turn = 0
     current_messages = list(messages)
 
     while turn < MAX_AGENT_TURNS:
         turn += 1
-        r = _call_ollama(current_messages, stream=False)
+        r = _call_ollama(current_messages, stream=False, setup_mode=setup_mode)
         r.raise_for_status()
         data = r.json()
         msg = data.get("message", {})
 
         tool_calls = msg.get("tool_calls") or []
-        content = msg.get("content") or ""
+        content = strip_think_tags(msg.get("content") or "")
 
         if tool_calls:
             current_messages.append({"role": "assistant", "tool_calls": tool_calls})

@@ -1,17 +1,24 @@
 """Ollama streaming interface with think-tag stripping."""
 
 import json
+import logging
 import re
 import requests
 
-from config import OLLAMA_BASE_URL, OLLAMA_MODEL
+from config import OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT
+
+logger = logging.getLogger(__name__)
 
 THINK_PATTERN = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
 def strip_think_tags(text: str) -> str:
-    """Remove DeepSeek-R1 think blocks from output."""
-    return THINK_PATTERN.sub("", text).strip()
+    """Remove DeepSeek-R1 think blocks from output. Also strips unclosed <think> at end."""
+    out = THINK_PATTERN.sub("", text)
+    # Remove unclosed <think>... to end of string
+    if "<think>" in out:
+        out = re.sub(r"<think>.*", "", out, flags=re.DOTALL)
+    return out.strip()
 
 
 def stream_completion(messages: list[dict]):
@@ -22,7 +29,7 @@ def stream_completion(messages: list[dict]):
     raw_buffer = ""
     emitted_len = 0
 
-    with requests.post(url, json=payload, stream=True, timeout=60) as r:
+    with requests.post(url, json=payload, stream=True, timeout=OLLAMA_TIMEOUT) as r:
         r.raise_for_status()
         for line in r.iter_lines(decode_unicode=True):
             if not line or not line.strip():
@@ -40,13 +47,21 @@ def stream_completion(messages: list[dict]):
             msg = obj.get("message", {})
             content = msg.get("content", "") or ""
             raw_buffer += content
-            cleaned = strip_think_tags(raw_buffer)
+            # Only run regex when think blocks might be present (avoids O(n²) for models without think)
+            if "<think>" in raw_buffer or obj.get("done"):
+                cleaned = strip_think_tags(raw_buffer)
+            else:
+                cleaned = raw_buffer
             if len(cleaned) > emitted_len:
                 yield (cleaned[emitted_len:], False, None)
                 emitted_len = len(cleaned)
             if obj.get("done"):
                 yield ("", True, None)
                 return
+
+
+# Max chars to send for summarization to avoid blowing context
+SUMMARISE_MAX_CHARS = 60_000
 
 
 def summarise_history(messages: list[dict]) -> str:
@@ -67,20 +82,32 @@ def summarise_history(messages: list[dict]) -> str:
         return ""
 
     conversation_text = "\n".join(parts)
-    prompt = (
-        "Summarise this interview prep conversation into a concise context block "
-        "(max 400 words). Preserve: key topics discussed, questions asked, concepts "
-        "explained, and the user's demonstrated level of understanding.\n\n"
-        f"{conversation_text}"
-    )
+    if len(conversation_text) > SUMMARISE_MAX_CHARS:
+        conversation_text = conversation_text[-SUMMARISE_MAX_CHARS:]
 
-    url = f"{OLLAMA_BASE_URL}/api/generate"
-    payload = {"model": OLLAMA_MODEL, "prompt": prompt, "stream": False}
+    url = f"{OLLAMA_BASE_URL}/api/chat"
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Summarise this interview prep conversation into a concise context block "
+                    "(max 400 words). Preserve: key topics discussed, questions asked, concepts "
+                    "explained, and the user's demonstrated level of understanding."
+                ),
+            },
+            {"role": "user", "content": conversation_text},
+        ],
+        "stream": False,
+    }
 
     try:
-        r = requests.post(url, json=payload, timeout=60)
+        r = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT)
         r.raise_for_status()
         data = r.json()
-        return strip_think_tags(data.get("response", ""))
-    except Exception:
+        response = (data.get("message") or {}).get("content", "") or ""
+        return strip_think_tags(response)
+    except Exception as e:
+        logger.debug("Summarise history failed: %s", e)
         return ""

@@ -1,4 +1,4 @@
-"""Build profile.json from resume and LinkedIn uploads."""
+"""Build profile from resume and LinkedIn uploads; save via DB repository."""
 
 import csv
 import json
@@ -9,7 +9,8 @@ from pathlib import Path
 
 import requests
 
-from config import BACKEND_ROOT, OLLAMA_BASE_URL, OLLAMA_MODEL
+from config import OLLAMA_BASE_URL, OLLAMA_MODEL
+from db import ensure_curriculum_from_profile, save_profile
 
 PROFILE_KEYS = {
     "name", "current_role", "consulting", "experience_years", "target_roles",
@@ -97,6 +98,20 @@ def _extract_resume(data: bytes, filename: str) -> str:
     raise ValueError(f"Unsupported resume type: {filename}")
 
 
+def extract_text_from_files(files: list[tuple[str, bytes]]) -> str:
+    """Extract and concatenate text from PDF, DOCX, TXT files. Skips unsupported types."""
+    parts = []
+    for filename, data in files:
+        lower = (filename or "").lower()
+        if not (lower.endswith(".pdf") or lower.endswith(".docx") or lower.endswith(".txt")):
+            continue
+        try:
+            parts.append(f"--- {filename} ---\n" + _extract_resume(data, filename))
+        except Exception:
+            continue
+    return "\n\n".join(parts) if parts else ""
+
+
 def _call_ollama_for_profile(combined: str) -> dict:
     """Call Ollama to fill profile schema from combined resume + LinkedIn text."""
     schema_desc = json.dumps({
@@ -169,8 +184,10 @@ Input text:
 def build_profile_from_uploads(
     resume_files: list[tuple[str, bytes]],
     linkedin_zip_bytes: bytes | None,
-) -> dict:
-    """Build profile dict from resume file list and optional LinkedIn ZIP. Writes profile.json."""
+    profile_id: str | None = None,
+    label: str = "",
+) -> tuple[dict, str]:
+    """Build profile dict from resume file list and optional LinkedIn ZIP. Saves via DB repo. Returns (profile_dict, profile_id)."""
     resume_texts = []
     for filename, data in resume_files:
         if len(data) > MAX_FILE_BYTES:
@@ -192,7 +209,6 @@ def build_profile_from_uploads(
         raise ValueError("No extractable text from uploads")
 
     profile = _call_ollama_for_profile(combined)
-    path = BACKEND_ROOT / "profile.json"
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(profile, f, indent=2)
-    return profile
+    saved_id = save_profile(profile_id, label or "Profile", profile)
+    ensure_curriculum_from_profile(profile)
+    return profile, saved_id

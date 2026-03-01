@@ -1,47 +1,29 @@
-"""Weak area tracker with curriculum and progress."""
+"""Weak area tracker with curriculum and progress. Curriculum and progress per profile via DB."""
 
-import json
 from datetime import datetime
 
-from config import BACKEND_ROOT
-
-CURRICULUM_PATH = BACKEND_ROOT / "curriculum.json"
-PROGRESS_PATH = BACKEND_ROOT / "progress.json"
-PROFILE_PATH = BACKEND_ROOT / "profile.json"
-
-
-def _load_json(path, default: dict) -> dict:
-    if path.exists():
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    return default.copy()
-
-
-def _save_progress(data: dict) -> None:
-    with open(PROGRESS_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+from db import get_profile, get_progress, list_curriculum, save_progress
 
 
 def load_curriculum() -> list[dict]:
-    """Load topic taxonomy from curriculum.json."""
-    data = _load_json(CURRICULUM_PATH, {"topics": []})
-    return data.get("topics", [])
+    """Load topic taxonomy from DB (can be updated dynamically from conversation)."""
+    return list_curriculum()
 
 
-def load_progress() -> dict:
-    """Load progress.json; initialise from curriculum if missing."""
-    if PROGRESS_PATH.exists():
-        with open(PROGRESS_PATH, encoding="utf-8") as f:
-            return json.load(f)
-    curriculum = load_curriculum()
-    progress = {"topics": {}}
-    for t in curriculum:
-        progress["topics"][t["id"]] = {
-            "score": 0.5,
-            "label": t["label"],
-            "last_visited": None,
-        }
-    _save_progress(progress)
+def load_progress(profile_id: str) -> dict:
+    """Load progress for profile from DB; initialise from curriculum if missing."""
+    progress = get_progress(profile_id)
+    topics = progress.get("topics", {})
+    if not topics:
+        curriculum = load_curriculum()
+        for t in curriculum:
+            topics[t["id"]] = {
+                "score": 0.5,
+                "label": t["label"],
+                "last_visited": None,
+            }
+        save_progress(profile_id, {"topics": topics})
+        progress = {"topics": topics}
     return progress
 
 
@@ -54,9 +36,9 @@ def _match_needs_depth(topic: dict, needs_depth: list[str]) -> bool:
     return False
 
 
-def update_score(topic_id: str, assessment: str) -> None:
-    """Update topic score: strong +0.3, partial +0.1, weak -0.1."""
-    progress = load_progress()
+def update_score(topic_id: str, assessment: str, profile_id: str) -> None:
+    """Update topic score for profile: strong +0.3, partial +0.1, weak -0.1."""
+    progress = load_progress(profile_id)
     topics = progress.get("topics", {})
     if topic_id not in topics:
         curriculum = load_curriculum()
@@ -70,14 +52,15 @@ def update_score(topic_id: str, assessment: str) -> None:
     s = topics[topic_id]["score"]
     topics[topic_id]["score"] = max(0, min(1, s + delta))
     topics[topic_id]["last_visited"] = datetime.now().isoformat()
-    _save_progress(progress)
+    save_progress(profile_id, progress)
 
 
-def get_progress_summary() -> dict:
-    """Return weak, strong, suggested_next for /progress API."""
-    progress = load_progress()
-    profile = _load_json(PROFILE_PATH, {})
-    needs_depth = profile.get("needs_depth", [])
+def get_progress_summary(profile_id: str) -> dict:
+    """Return weak, strong, suggested_next for /progress API for the given profile."""
+    progress = load_progress(profile_id)
+    profile_obj = get_profile(profile_id)
+    profile_data = (profile_obj or {}).get("data") or {}
+    needs_depth = profile_data.get("needs_depth", [])
 
     topics = progress.get("topics", {})
     curriculum = load_curriculum()

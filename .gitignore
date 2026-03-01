@@ -1,23 +1,34 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 .venv/
 venv/
 backend/venv/
+backend/.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Env and local data
 .env
 *.log
 backend/sessions/*.json
+backend/data/
+
+# Legacy (no longer used; kept so local files aren't committed)
 backend/profile.json
 backend/progress.json
-.backend.pid
-.ollama.pid
-frontend/.dart_tool/
-frontend/build/
-frontend/.packages
+
+# IDE / OS
 *.iml
 .idea/
 .DS_Store
+
+# Project / tooling
 .cursor/
 .specify/
 specs.md
 specs/
+.backend.pid
+.ollama.pid

@@ -1,35 +1,81 @@
 # Studia
 
-A fully local, voice + text interview preparation study companion. Flutter frontend talking to a FastAPI backend, powered by Ollama (local LLM), Whisper (STT), and on-demand company research. Runs only when you need it — feels like Claude/ChatGPT but knows everything about you.
+A local, API-first interview preparation coach. FastAPI backend with a minimal HTML/CSS/JS web UI, powered by Ollama (local LLM). Profiles and conversation history live in PostgreSQL.
+
+![Studia — Ready to practice](docs/screenshot-ready-to-practice.png)
 
 ## Features
 
-- **First-time onboarding** — On first launch, upload resumes (PDF, DOCX, TXT) and your LinkedIn data export (ZIP); the AI builds your profile automatically.
-- **Text & voice chat** — Type or speak; get streaming LLM responses with ChatGPT-style token-by-token rendering
-- **Agent AI** — The model can call tools (company research, JD parsing, progress lookup, curriculum, topic scoring) when relevant.
-- **Profile-aware** — Adapts to your background, strengths, and areas to improve via `profile.json`
-- **Weak area tracking** — Silently scores understanding per topic; suggests what to study next
-- **Company research** — Pastes a company name or JD; fetches interview patterns from LeetCode, Blind, Glassdoor, GitHub
-- **Progress screen** — View weak/strong topics, tap to jump into chat with suggested topics
-- **100% local** — No cloud databases, no API keys; Ollama runs on your machine; STT/TTS run on-device in Flutter
+### Profiles
 
-## Tech Stack
+**Purpose:** Give the coach a clear picture of who you are so advice is tailored, not generic.
 
-| Layer   | Technologies                                      |
-|---------|---------------------------------------------------|
-| Frontend| Flutter (macOS/web), GetX, speech_to_text, flutter_tts, gpt_markdown |
-| Backend | FastAPI, uvicorn, SSE streaming (text-only)       |
-| LLM     | Ollama (qwen3 with agent/tool calling)            |
-| STT     | speech_to_text (on-device; Flutter)               |
-| TTS     | flutter_tts (on-device; Flutter)                  |
-| Research| ddgs (DuckDuckGo), BeautifulSoup                  |
+- **Create from documents** — Upload one or more resumes (PDF, DOCX, TXT) and optionally a LinkedIn export ZIP. The LLM extracts structured data: name, current role, target roles, strong areas, areas needing depth, experience highlights, interview styles to prepare for, and study style. This is stored as a profile in the database.
+- **Multiple profiles** — You can create several profiles (e.g. different resumes or personas). Each has its own progress and curriculum. The UI lets you switch the active profile and set a default.
+- **Onboarding without uploads** — If you have no profile yet, you can describe yourself in chat; the agent can create a profile via a `create_profile` tool using the details you provide.
+- **Target role** — Per session you can set a target role (e.g. “Backend engineer”). The coach uses this to focus advice and system design questions on that role.
 
-## Quick Start
+### Chat
+
+**Purpose:** Main way to interact with the coach — ask questions, paste job descriptions, name topics, or attach files.
+
+- **Streaming responses** — Replies are streamed over SSE so you see text as it’s generated.
+- **Session and context** — Each conversation is tied to a session ID. History is stored in the database and used to build the context sent to the LLM (with optional summarisation for long threads). The coach also receives your active profile and target role so answers are personalised.
+- **Attachments** — You can attach files (e.g. PDF, DOCX, TXT) in chat. If you have no profile, attaching a resume can create one automatically; otherwise the extracted text is appended to your message so the coach can reference it.
+- **Setup mode** — When no profile exists, the app runs in “setup” mode: the agent can create a profile from conversation or from uploaded files, and the system prompt guides the coach to collect what’s needed.
+
+### Agent and tools
+
+**Purpose:** The LLM can act on your behalf — research companies, parse job descriptions, look up progress and curriculum, and update topic scores — so you get concrete, up-to-date answers.
+
+- **research_company** — When you mention a company, the agent can look it up. The backend searches LeetCode discussions, Blind, Glassdoor, and GitHub for interview experiences, then uses the LLM to summarise rounds, topics, difficulty, and tips. Results are cached for a few days to avoid repeated lookups.
+- **parse_jd** — When you paste a job description, the agent parses it and runs a gap analysis against your profile: required vs nice-to-have skills, seniority, tech stack, and what you should focus on. Requires an active profile.
+- **get_progress** — When you ask what to study next or about weak/strong topics, the agent fetches your progress: weak topics (score &lt; 0.4), strong topics (score ≥ 0.7), and a suggested next topic (prioritising areas that match your profile’s “needs depth” or your weakest score).
+- **lookup_curriculum** — Returns the list of topics (optionally by category) so the coach can suggest specific curriculum items or explain what’s available.
+- **update_topic_score** — After discussing a topic, the agent can record your level: `strong`, `partial`, or `weak`. Scores are updated in the database (strong +0.3, partial +0.1, weak −0.1, clamped 0–1). This keeps weak/strong and “suggested next” in sync with how you’re actually doing.
+
+### Progress and curriculum
+
+**Purpose:** Track which topics you’re strong or weak in and what to study next, so the coach can recommend accordingly.
+
+- **Curriculum** — A taxonomy of topics (id, label, category, keywords). It is seeded from your profile when you onboard: labels from “strong areas”, “needs depth”, “target roles”, and “interview styles” become curriculum topics. The agent can also add or reference topics over time.
+- **Progress** — Stored per profile: for each topic, a score (0–1), label, and last_visited. Weak/strong lists and “suggested next” are derived from these scores (weak &lt; 0.4, strong ≥ 0.7). Suggested next prefers topics that match your profile’s “needs depth”, then falls back to your weakest topic.
+- **API** — `GET /progress?profile_id=...` returns weak, strong, suggested_next, and suggested_next_label for the given (or default) profile.
+
+### Company and JD research (standalone API)
+
+**Purpose:** Let the web UI or other clients trigger research without going through chat.
+
+- **POST /research** — `type=company` and `value=Company Name` returns the same company research (summary from LeetCode/Blind/Glassdoor/GitHub, cached). `type=jd` and `value=<job description text>` plus optional `profile_id` returns JD parsing and gap analysis against that profile. Useful for “paste a job description” or “research this company” buttons in the UI.
+
+### Session history
+
+**Purpose:** Persist conversation so you can resume or inspect past chats.
+
+- **GET /session/history?session_id=...** — Returns the conversation history for that session (list of role/content exchanges). Stored in the database; the coach uses it (with optional summarisation) to maintain context across long threads.
+
+### Data and deployment
+
+- **Database** — All state (profiles, progress, curriculum, sessions) lives in PostgreSQL. No file-based storage for runtime data. Set `DATABASE_URL` in `.env`.
+- **Local only** — No cloud APIs or keys; Ollama runs on your machine. Research uses DuckDuckGo and the local LLM for summarisation; company research cache is stored under `backend/sessions/` (gitignored).
+- **API-first** — Every feature is driven by APIs. The bundled web UI is a static HTML/CSS/JS client; you can replace it with another front end or CLI.
+
+## Tech stack
+
+| Layer   | Technologies |
+|---------|---------------|
+| Frontend | Static HTML/CSS/JS (served by backend); no build step |
+| Backend | FastAPI, uvicorn, SSE streaming |
+| Database | PostgreSQL (`DATABASE_URL` required) |
+| LLM | Ollama (qwen3 with agent/tool calling) |
+| Research | ddgs (DuckDuckGo) |
+
+## Quick start
 
 ### Prerequisites
 
-- [Ollama](https://ollama.ai) — `brew install ollama`
-- [Flutter](https://flutter.dev) SDK (macOS)
+- [Ollama](https://ollama.ai) — e.g. `brew install ollama`
+- [PostgreSQL](https://www.postgresql.org/) — create a database (e.g. `createdb studia`) and set `DATABASE_URL`
 - Python 3.10+
 
 ### 1. Pull the LLM model
@@ -38,47 +84,25 @@ A fully local, voice + text interview preparation study companion. Flutter front
 ollama pull qwen3
 ```
 
-(qwen3 supports tool calling; deepseek-r1 does not.)
-
-### 2. Setup backend
+### 2. Backend
 
 ```bash
 cd backend
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate   # or: venv\Scripts\activate on Windows
 pip install -r requirements.txt
 ```
 
-### 3. Setup frontend
+Copy `.env.example` to `.env` and set `DATABASE_URL` to your PostgreSQL connection string (see Configuration).
+
+### 3. Run
 
 ```bash
-cd frontend
-flutter pub get
-```
-
-### 4. Profile (first run)
-
-- **Option A:** Run the app; when no profile exists you’ll see the onboarding screen. Upload one or more resumes (PDF, DOCX, TXT) and your LinkedIn “Download your data” ZIP. The AI generates `profile.json` from them.
-- **Option B:** Manually: `cp backend/profile.example.json backend/profile.json` and edit it.
-
-(Profile is gitignored — your data stays local.)
-
-### 5. Run
-
-```bash
-# From project root
-chmod +x start.sh stop.sh
+# From project root (start Ollama + backend)
 ./start.sh
 ```
 
-Then in a new terminal:
-
-```bash
-cd frontend
-flutter run -d macos
-```
-
-Backend runs at http://127.0.0.1:8000.
+Then open **http://127.0.0.1:8000**. First time: create a profile via onboarding (resumes/LinkedIn). Then select profile and target role, and chat.
 
 ### Stop
 
@@ -86,66 +110,42 @@ Backend runs at http://127.0.0.1:8000.
 ./stop.sh
 ```
 
-## Project Structure
+### Run with Docker
 
-```
-studia/
-├── backend/              # FastAPI Python backend (text-only; no STT/TTS)
-│   ├── main.py           # Routes: /chat, /research, /progress, /session/history, profile
-│   ├── config.py         # Settings, BACKEND_ROOT
-│   ├── core/             # LLM, agent, context
-│   ├── services/         # Research, session, tracker, tools, profile_builder
-│   ├── profile.json      # Your profile (created by onboarding or manual)
-│   ├── curriculum.json   # Topic taxonomy
-│   └── progress.json    # Auto-created topic scores
-├── frontend/             # Flutter app
-│   └── lib/
-│       ├── screens/      # Chat, Progress, Onboarding
-│       ├── widgets/      # Message bubble, voice button, topic chips
-│       └── services/     # API, audio, speech_tts (STT/TTS on-device)
-├── start.sh              # Starts Ollama + backend
-└── stop.sh               # Stops both
+Run Ollama on the host (e.g. `ollama pull qwen3` and start Ollama). Then:
+
+```bash
+docker compose up --build
 ```
 
-## API Reference
+Open **http://127.0.0.1:8000**. The backend in the container uses `OLLAMA_BASE_URL=http://host.docker.internal:11434` by default so it can reach Ollama on the host (Mac/Windows). On Linux, set `OLLAMA_BASE_URL=http://host.docker.internal:11434` or use your host’s IP. Set `DATABASE_URL` to your PostgreSQL instance (e.g. `docker compose --profile postgres up` for a Postgres service and point the backend at it).
 
-| Endpoint                  | Method | Description                                      |
-|---------------------------|--------|--------------------------------------------------|
-| `/profile/status`         | GET    | `{ "exists": true \| false }` — for onboarding   |
-| `/profile/from-uploads`   | POST   | Multipart: resumes (PDF/DOCX/TXT) + linkedin ZIP → creates profile.json |
-| `/chat`                   | POST   | Text chat; SSE stream (503 if no profile). Voice: Flutter does STT on-device, then sends transcript here. |
-| `/research`               | POST   | Company or JD research                           |
-| `/progress`               | GET    | Weak/strong topics, suggested next               |
-| `/session/history`        | GET    | Conversation history for session                 |
+## API reference
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check; returns `{ "status": "ok", "db": "ok" }` |
+| `/profile/status` | GET | `exists`, `default_profile_id`, `profiles: [{ id, label }]` |
+| `/profile/from-uploads` | POST | Multipart: resumes + optional linkedin ZIP + optional `label` → creates profile, returns `profile_id` |
+| `/profile/default` | POST | Form: `profile_id` — set default profile |
+| `/chat` | POST | JSON: `message`, `session_id`, `profile_id` (required), optional `target_role` → SSE stream |
+| `/progress` | GET | Query: optional `profile_id` (default profile if omitted) |
+| `/research` | POST | Form: `type` (company/jd), `value`; for jd, optional `profile_id` |
+| `/session/history` | GET | Query: `session_id` → conversation history |
+
+The backend is API-first: you can build another client (CLI, mobile app, etc.) that talks to these endpoints; all state is in the database.
 
 ## Configuration
 
-- **Backend**: `backend/config.py` — model (`qwen3`), `AGENT_MODE` (tool calling), history limits
-- **Profile**: `backend/profile.json` — loaded on every request (hot reload)
-- **Curriculum**: `backend/curriculum.json` — topic IDs, labels, keywords
-- **Frontend API URL**: `frontend/lib/services/api_service.dart` — `baseUrl` (default `http://127.0.0.1:8000`). Change if backend runs elsewhere.
+Configuration is via environment variables. Copy `.env.example` to `.env` and adjust. Key variables:
 
-## External dependencies (outside your control)
+- `OLLAMA_BASE_URL` — default `http://localhost:11434`
+- `OLLAMA_MODEL` — default `qwen3`
+- `BACKEND_HOST`, `BACKEND_PORT` — server bind
+- `DATABASE_URL` — **required**; PostgreSQL connection string, e.g. `postgresql://user:password@localhost:5432/studia`.
 
-Things that may break or need updates as third parties change:
+See `.env.example` for the full list. All app state (profiles, progress, curriculum, sessions) is in PostgreSQL; `.env` and `backend/sessions/` (research cache) are gitignored.
 
-| Dependency | What to watch |
-|------------|---------------|
-| **Ollama model** | `qwen3` — Ollama can rename/remove models. Update `config.py` if the model name changes. Set `AGENT_MODE=False` to fall back to plain LLM without tools. |
-| **ddgs** | DuckDuckGo search for company research. Rate limits or API changes can affect `/research`. |
-| **Research sources** | LeetCode, Blind, Glassdoor, GitHub — site structure or scraping policies can change. Spec already notes Glassdoor blocks direct fetch. |
-| **speech_to_text / flutter_tts** | On-device; behavior depends on platform/browser. |
+---
 
-## Roadmap
-
-- **v1** (current): Onboarding from resumes + LinkedIn, agent AI with tools, text + voice chat, progress tracking, company research, JD paste
-- **v2**: Spaced repetition, export notes
-
-## What stays local (gitignored)
-
-- `backend/profile.json` — your personal profile (name, employers, experience)
-- `backend/progress.json` — your topic scores and study history
-- `backend/sessions/*.json` — session logs and research cache
-- `.env` — any API keys or secrets (none required for local use)
-
-Use onboarding in the app to create `profile.json` from uploads, or copy `profile.example.json` to `profile.json` and edit manually.
+*Built with [Cursor](https://cursor.com) and Claude — vibe coded.*

@@ -1,37 +1,70 @@
-"""Session state and history with context window management."""
+"""Session state and history with context window management. Persisted via DB repository."""
 
-import json
-from datetime import datetime
+from config import LOG_SESSIONS, MAX_HISTORY_EXCHANGES
+from db import get_session as _db_get, save_session as _db_save
 
-from config import BACKEND_ROOT, LOG_SESSIONS, MAX_HISTORY_EXCHANGES
 
-SESSIONS_DIR = BACKEND_ROOT / "sessions"
-SESSIONS_DIR.mkdir(exist_ok=True)
-
-_sessions: dict[str, dict] = {}
+def ensure_session(session_id: str, profile_id: str, target_role: str | None = None) -> None:
+    """Create or update session with profile_id and target_role. Call at start of chat."""
+    s = _db_get(session_id)
+    if s is None:
+        _db_save(session_id, profile_id, [], target_role=target_role)
+    else:
+        _db_save(
+            session_id,
+            profile_id,
+            s["history"],
+            target_role=target_role or s.get("target_role"),
+            research_context=s.get("research_context"),
+            company=s.get("company"),
+            summary=s.get("summary"),
+        )
 
 
 def get_session(session_id: str) -> dict:
-    """Get or create session state."""
-    if session_id not in _sessions:
-        _sessions[session_id] = {
-            "history": [],
-            "summary": None,
-            "research_context": None,
-            "company": None,
+    """Get session state from DB. Creates in-memory placeholder if not in DB (for backward compat)."""
+    s = _db_get(session_id)
+    if s is not None:
+        return {
+            "history": s["history"],
+            "summary": s.get("summary"),
+            "research_context": s.get("research_context"),
+            "company": s.get("company"),
+            "profile_id": s.get("profile_id"),
+            "target_role": s.get("target_role"),
         }
-    return _sessions[session_id]
+    return {
+        "history": [],
+        "summary": None,
+        "research_context": None,
+        "company": None,
+        "profile_id": None,
+        "target_role": None,
+    }
 
 
 def add_exchange(session_id: str, role: str, content: str) -> None:
-    """Add user/assistant exchange to history."""
-    session = get_session(session_id)
-    session["history"].append({"role": role, "content": content})
+    """Add user/assistant exchange to history and persist."""
+    s = _db_get(session_id)
+    if s is None:
+        _db_save(session_id, "", [{"role": role, "content": content}])
+        return
+    history = s["history"] + [{"role": role, "content": content}]
+    _db_save(
+        session_id,
+        s["profile_id"],
+        history,
+        target_role=s.get("target_role"),
+        research_context=s.get("research_context"),
+        company=s.get("company"),
+        summary=s.get("summary"),
+    )
 
 
 def get_history(session_id: str) -> list[dict]:
     """Return full exchange history for API."""
-    return get_session(session_id).get("history", [])
+    s = _db_get(session_id)
+    return s["history"] if s else []
 
 
 def get_messages_for_llm(
@@ -39,17 +72,28 @@ def get_messages_for_llm(
     summarise_fn=None,
 ) -> list[dict]:
     """Get message list for LLM, applying context window management."""
-    session = get_session(session_id)
-    history = session["history"].copy()
-    summary = session.get("summary")
+    s = _db_get(session_id)
+    if s is None:
+        return []
+    history = list(s["history"])
+    summary = s.get("summary")
 
     if len(history) <= MAX_HISTORY_EXCHANGES:
-        return [{"role": h["role"], "content": h["content"]} for h in history]
+        out = [{"role": h["role"], "content": h["content"]} for h in history]
+        return out
 
     if summarise_fn and not summary:
         old = history[:-10]
         summary = summarise_fn(old)
-        session["summary"] = summary
+        _db_save(
+            session_id,
+            s["profile_id"],
+            history[-10:],
+            target_role=s.get("target_role"),
+            research_context=s.get("research_context"),
+            company=s.get("company"),
+            summary=summary,
+        )
         history = history[-10:]
 
     messages = []
@@ -65,22 +109,31 @@ def get_messages_for_llm(
 
 def set_research_context(session_id: str, company: str, context: str) -> None:
     """Store company research context for this session."""
-    session = get_session(session_id)
-    session["research_context"] = context
-    session["company"] = company
+    s = _db_get(session_id)
+    if s is None:
+        return
+    _db_save(
+        session_id,
+        s["profile_id"],
+        s["history"],
+        target_role=s.get("target_role"),
+        research_context=context,
+        company=company,
+        summary=s.get("summary"),
+    )
 
 
 def get_research_context(session_id: str) -> tuple[str | None, str | None]:
     """Return (company, research_context) if set."""
-    s = get_session(session_id)
+    s = _db_get(session_id)
+    if s is None:
+        return None, None
     return s.get("company"), s.get("research_context")
 
 
 def log_session(session_id: str) -> None:
-    """Write session to file if logging enabled."""
+    """No-op when using DB (history already persisted). Kept for API compatibility."""
     if not LOG_SESSIONS:
         return
-    session = get_session(session_id)
-    path = SESSIONS_DIR / f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"session_id": session_id, "history": session["history"]}, f, indent=2)
+    # Optional: write a copy to sessions/ for backup/debug
+    pass

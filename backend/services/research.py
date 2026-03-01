@@ -103,13 +103,14 @@ def research_company(company: str) -> dict:
     }
 
 
-def parse_jd(jd_text: str) -> dict:
-    """Parse job description and return gap analysis."""
+def parse_jd(jd_text: str, profile_id: str) -> dict:
+    """Parse job description and return gap analysis. Uses profile from DB."""
     import requests
 
-    profile_path = BACKEND_ROOT / "profile.json"
-    with open(profile_path, encoding="utf-8") as f:
-        profile = json.load(f)
+    from db import get_profile
+
+    profile_obj = get_profile(profile_id)
+    profile = (profile_obj or {}).get("data") or {}
 
     prompt = f"""Extract from this job description:
 - Required technical skills
