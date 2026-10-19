@@ -67,34 +67,55 @@ def get_history(session_id: str) -> list[dict]:
     return s["history"] if s else []
 
 
+# Turns kept verbatim after a summary. Older turns are folded into the summary.
+_RECENT_TAIL = 10
+
+
 def get_messages_for_llm(
     session_id: str,
     summarise_fn=None,
 ) -> list[dict]:
-    """Get message list for LLM, applying context window management."""
+    """Get message list for LLM, applying context window management.
+
+    The stored summary is always included, including after history has been
+    trimmed back under the cap. When history grows past the cap again, the
+    overflow is summarised into the existing summary and only the recent tail
+    is kept. A failed summary leaves the stored history unchanged.
+    """
     s = _db_get(session_id)
     if s is None:
         return []
     history = list(s["history"])
-    summary = s.get("summary")
+    summary = s.get("summary") or None
 
-    if len(history) <= MAX_HISTORY_EXCHANGES:
-        out = [{"role": h["role"], "content": h["content"]} for h in history]
-        return out
-
-    if summarise_fn and not summary:
-        old = history[:-10]
-        summary = summarise_fn(old)
-        _db_save(
-            session_id,
-            s["profile_id"],
-            history[-10:],
-            target_role=s.get("target_role"),
-            research_context=s.get("research_context"),
-            company=s.get("company"),
-            summary=summary,
-        )
-        history = history[-10:]
+    if len(history) > MAX_HISTORY_EXCHANGES and summarise_fn:
+        tail_len = min(_RECENT_TAIL, MAX_HISTORY_EXCHANGES)
+        if tail_len <= 0:
+            tail, overflow = [], history
+        else:
+            tail, overflow = history[-tail_len:], history[:-tail_len]
+        if overflow:
+            to_summarise = list(overflow)
+            if summary:
+                # Passed as a system turn so the previous summary is folded in
+                # rather than treated as a new user message.
+                to_summarise.insert(0, {
+                    "role": "system",
+                    "content": f"[Previous conversation summary]: {summary}",
+                })
+            new_summary = summarise_fn(to_summarise)
+            if new_summary:
+                summary = new_summary
+                _db_save(
+                    session_id,
+                    s["profile_id"],
+                    tail,
+                    target_role=s.get("target_role"),
+                    research_context=s.get("research_context"),
+                    company=s.get("company"),
+                    summary=summary,
+                )
+                history = tail
 
     messages = []
     if summary:
@@ -102,8 +123,7 @@ def get_messages_for_llm(
             "role": "system",
             "content": f"[Previous conversation summary]: {summary}",
         })
-    for h in history:
-        messages.append({"role": h["role"], "content": h["content"]})
+    messages.extend({"role": h["role"], "content": h["content"]} for h in history)
     return messages
 
 

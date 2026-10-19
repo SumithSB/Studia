@@ -74,9 +74,18 @@ def summarise_history(messages: list[dict]) -> str:
     for m in messages:
         role = m.get("role", "")
         content = m.get("content", "")
-        if content and role in ("user", "assistant"):
-            prefix = "User" if role == "user" else "Assistant"
-            parts.append(f"{prefix}: {content}")
+        if not content:
+            continue
+        if role == "user":
+            prefix = "User"
+        elif role == "assistant":
+            prefix = "Assistant"
+        elif role == "system":
+            # Prior summaries are passed as system turns and must not be dropped.
+            prefix = "Context"
+        else:
+            continue
+        parts.append(f"{prefix}: {content}")
 
     if not parts:
         return ""
