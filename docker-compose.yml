@@ -1,5 +1,7 @@
-# Studia: backend only (SQLite). Run Ollama on the host; see README for OLLAMA_BASE_URL.
-# Optional: use the postgres profile for a Postgres DB instead of SQLite.
+# Studia backend. PostgreSQL only: DATABASE_URL must be a postgresql:// URL or the
+# process exits at import. Run Ollama on the host; see README for OLLAMA_BASE_URL.
+# Optional Postgres: docker compose --profile postgres up
+# and DATABASE_URL=postgresql://studia:studia@postgres:5432/studia
 services:
   backend:
     build: .
@@ -12,8 +14,8 @@ services:
       - studia_data:/app/backend/data
     restart: unless-stopped
 
-  # Optional Postgres (backend currently supports SQLite only; use when Postgres support is added):
-  # docker compose --profile postgres up; set DATABASE_URL=postgresql://studia:studia@postgres:5432/studia for backend.
+  # Optional Postgres. The backend does not start without DATABASE_URL pointing here
+  # (or at another PostgreSQL instance): postgresql://studia:studia@postgres:5432/studia
   postgres:
     image: postgres:16-alpine
     profiles:

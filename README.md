@@ -110,6 +110,19 @@ Then open **http://127.0.0.1:8000**. First time: create a profile via onboarding
 ./stop.sh
 ```
 
+### Running tests
+
+From `backend/` with the virtualenv activated:
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
+
+`requirements-dev.txt` adds pytest and httpx on top of `requirements.txt`. Importing the app still requires a `postgresql://` `DATABASE_URL`. If that variable is unset or not a PostgreSQL URL, `backend/tests/conftest.py` sets it to `postgresql://studia:studia@127.0.0.1:5432/studia` for the test process only.
+
+`tests/test_tracker.py` and `tests/test_session_context.py` mock storage and do not open a connection. `tests/test_api.py` uses PostgreSQL and is skipped when nothing accepts TCP on the host and port in `DATABASE_URL`.
+
 ### Run with Docker
 
 Run Ollama on the host (e.g. `ollama pull qwen3` and start Ollama). Then:
@@ -118,7 +131,9 @@ Run Ollama on the host (e.g. `ollama pull qwen3` and start Ollama). Then:
 docker compose up --build
 ```
 
-Open **http://127.0.0.1:8000**. The backend in the container uses `OLLAMA_BASE_URL=http://host.docker.internal:11434` by default so it can reach Ollama on the host (Mac/Windows). On Linux, set `OLLAMA_BASE_URL=http://host.docker.internal:11434` or use your host’s IP. Set `DATABASE_URL` to your PostgreSQL instance (e.g. `docker compose --profile postgres up` for a Postgres service and point the backend at it).
+Open **http://127.0.0.1:8000**. The backend in the container uses `OLLAMA_BASE_URL=http://host.docker.internal:11434` by default so it can reach Ollama on the host (Mac/Windows). On Linux, set `OLLAMA_BASE_URL=http://host.docker.internal:11434` or use your host’s IP.
+
+The process exits on import unless `DATABASE_URL` is a `postgresql://` URL. Compose forwards that variable into the backend container and leaves it empty when it is unset. For the optional Postgres service (`docker compose --profile postgres up`), set `DATABASE_URL=postgresql://studia:studia@postgres:5432/studia` (user, password, and database name are the `postgres` service in `docker-compose.yml`).
 
 ## API reference
 
@@ -137,14 +152,27 @@ The backend is API-first: you can build another client (CLI, mobile app, etc.) t
 
 ## Configuration
 
-Configuration is via environment variables. Copy `.env.example` to `.env` and adjust. Key variables:
+Copy `.env.example` to `.env` in the repo root or to `backend/.env`. `config.py` loads the repo-root file first, then `backend/.env`, and does not override variables that are already set (including the process environment).
 
-- `OLLAMA_BASE_URL` — default `http://localhost:11434`
-- `OLLAMA_MODEL` — default `qwen3`
-- `BACKEND_HOST`, `BACKEND_PORT` — server bind
-- `DATABASE_URL` — **required**; PostgreSQL connection string, e.g. `postgresql://user:password@localhost:5432/studia`.
+`DATABASE_URL` is required. It must start with `postgresql` (for example `postgresql://user:password@localhost:5432/studia`). If it is missing or not a PostgreSQL URL, importing the app raises `RuntimeError`.
 
-See `.env.example` for the full list. All app state (profiles, progress, curriculum, sessions) is in PostgreSQL; `.env` and `backend/sessions/` (research cache) are gitignored.
+Every other variable is optional. Defaults below are the ones in `config.py`:
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama HTTP API |
+| `OLLAMA_MODEL` | `qwen3` | Model name sent to Ollama |
+| `OLLAMA_TIMEOUT` | `300` | Seconds for Ollama HTTP calls (chat, streaming, and history summarisation). A chat timeout tells you to raise this. |
+| `AGENT_MODE` | `true` | `true`, `1`, or `yes` (any case) uses the tool-calling agent. Any other value streams a completion with no tools. |
+| `MAX_AGENT_TURNS` | `5` | Maximum tool-calling rounds in one chat response |
+| `LOG_SESSIONS` | `true` | Same truthy values as `AGENT_MODE`. `log_session` returns immediately when this is off. Chat history is stored in PostgreSQL either way; that function does not write a file. |
+| `MAX_HISTORY_EXCHANGES` | `30` | When stored history is longer than this and a summariser is provided (chat always passes one), older turns are summarised and a recent tail of at most 10 exchanges is kept. A failed summary leaves the stored history unchanged. |
+| `RESEARCH_MAX_SOURCES` | `8` | How many company-research queries run. At most twice that many snippets are sent to the summariser. |
+| `RESEARCH_CACHE_DAYS` | `7` | How long a company research result is reused from `backend/sessions/research_cache.json` |
+| `BACKEND_HOST` | `127.0.0.1` | Loaded by `config.py` only. `start.sh` listens on `127.0.0.1:8000`, and the Docker image listens on `0.0.0.0:8000`. Neither reads this variable. |
+| `BACKEND_PORT` | `8000` | Same as `BACKEND_HOST`: defined, but not used by `start.sh` or the image command. |
+
+Profiles, progress, curriculum, and sessions live in PostgreSQL. `.env` and `backend/sessions/` (research cache) are gitignored.
 
 ---
 

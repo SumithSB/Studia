@@ -5,6 +5,7 @@ Thanks for your interest in contributing. Studia is a local, self-hosted intervi
 ## Prerequisites
 
 - Python 3.10+
+- [PostgreSQL](https://www.postgresql.org/) — create a database and set `DATABASE_URL` to a `postgresql://` URL. The app raises `RuntimeError` at import without it. There is no SQLite backend.
 - [Ollama](https://ollama.ai) (for the LLM; run `ollama pull qwen3`)
 
 ## Running locally
@@ -18,7 +19,7 @@ Thanks for your interest in contributing. Studia is a local, self-hosted intervi
    pip install -r requirements.txt
    ```
 
-2. Optional: copy `.env.example` to `.env` and adjust (e.g. `OLLAMA_BASE_URL` if Ollama runs elsewhere).
+2. Copy `.env.example` to `.env` in the repo root or to `backend/.env`, and set `DATABASE_URL`. Other variables are optional; see the Configuration section in the README.
 
 3. Start the backend:
 
@@ -39,7 +40,7 @@ pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 
-See `backend/tests/` for the test suite.
+`requirements-dev.txt` adds pytest and httpx. If `DATABASE_URL` is unset or not a PostgreSQL URL, `backend/tests/conftest.py` sets it to `postgresql://studia:studia@127.0.0.1:5432/studia` for the test process. `tests/test_tracker.py` and `tests/test_session_context.py` mock storage and do not connect. `tests/test_api.py` is skipped when nothing accepts TCP on that host and port.
 
 ## Submitting changes
 
@@ -51,7 +52,7 @@ See `backend/tests/` for the test suite.
 
 ## Code and design
 
-- Backend: Python 3.10+, FastAPI, SQLite by default. Config via environment variables; no secrets in code.
+- Backend: Python 3.10+, FastAPI, PostgreSQL (`DATABASE_URL` required). Config via environment variables; no secrets in code.
 - Frontend: Vanilla HTML/CSS/JS in `web/`; no build step. Message content is rendered with `textContent` to avoid XSS.
 - The app is single-user and local; no authentication. Do not expose it to untrusted networks.
 
