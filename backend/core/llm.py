@@ -34,15 +34,21 @@ def stream_completion(messages: list[dict]):
         for line in r.iter_lines(decode_unicode=True):
             if not line or not line.strip():
                 continue
-            if not line.startswith("data: "):
+            # Ollama /api/chat streams one JSON object per line. Some proxies
+            # wrap that same payload as an SSE "data:" field.
+            data = line.strip()
+            if data.startswith("data:"):
+                data = data[5:].strip()
+            if not data:
                 continue
-            data = line[6:]
             if data == "[DONE]":
                 yield ("", True, None)
                 return
             try:
                 obj = json.loads(data)
             except json.JSONDecodeError:
+                continue
+            if not isinstance(obj, dict):
                 continue
             msg = obj.get("message", {})
             content = msg.get("content", "") or ""
