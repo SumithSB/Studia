@@ -10,6 +10,7 @@ from pathlib import Path
 import requests
 
 from config import OLLAMA_BASE_URL, OLLAMA_MODEL
+from core.llm import strip_think_tags
 from db import ensure_curriculum_from_profile, save_profile
 
 PROFILE_KEYS = {
@@ -112,6 +113,46 @@ def extract_text_from_files(files: list[tuple[str, bytes]]) -> str:
     return "\n\n".join(parts) if parts else ""
 
 
+def _experience_years(val) -> int:
+    """Coerce a model value to a non-negative integer. Quoted numbers count."""
+    if isinstance(val, bool) or val is None:
+        return 0
+    if isinstance(val, (int, float)):
+        return max(0, int(val))
+    if isinstance(val, str):
+        match = re.search(r"\d+(?:\.\d+)?", val)
+        if match:
+            return max(0, int(float(match.group(0))))
+    return 0
+
+
+def _extract_json_object(text: str) -> dict:
+    """Return the first JSON object in a model reply.
+
+    A fenced block wins over surrounding prose. Decoding starts at the first
+    brace, so a } inside a string does not truncate the object.
+    """
+    decoder = json.JSONDecoder()
+    candidates: list[str] = []
+    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if fenced:
+        candidates.append(fenced.group(1))
+    stripped = text.strip()
+    if stripped not in candidates:
+        candidates.append(stripped)
+    for candidate in candidates:
+        start = candidate.find("{")
+        if start == -1:
+            continue
+        try:
+            obj, _end = decoder.raw_decode(candidate[start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            return obj
+    raise json.JSONDecodeError("No JSON object in model response", text, 0)
+
+
 def _call_ollama_for_profile(combined: str) -> dict:
     """Call Ollama to fill profile schema from combined resume + LinkedIn text."""
     schema_desc = json.dumps({
@@ -148,32 +189,13 @@ Input text:
         timeout=120,
     )
     r.raise_for_status()
-    response_text = r.json().get("response", "").strip()
-
-    # Allow JSON inside markdown code block
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", response_text)
-    if match:
-        response_text = match.group(1).strip()
-    # Find first { ... }
-    start = response_text.find("{")
-    if start != -1:
-        depth = 0
-        for i in range(start, len(response_text)):
-            if response_text[i] == "{":
-                depth += 1
-            elif response_text[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    response_text = response_text[start : i + 1]
-                    break
-
-    obj = json.loads(response_text)
-    # Normalize to schema
+    response_text = strip_think_tags(r.json().get("response", "") or "")
+    obj = _extract_json_object(response_text)
     result = {}
     for key in PROFILE_KEYS:
         val = obj.get(key)
         if key == "experience_years":
-            result[key] = int(val) if isinstance(val, (int, float)) else 0
+            result[key] = _experience_years(val)
         elif key in ("target_roles", "strong_areas", "needs_depth", "experience_highlights", "interview_styles_to_prepare"):
             result[key] = list(val) if isinstance(val, list) else [str(val)] if val else []
         else:
